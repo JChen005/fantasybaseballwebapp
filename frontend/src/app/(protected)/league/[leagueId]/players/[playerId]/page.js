@@ -1,0 +1,10 @@
+import DraftkitPagePlaceholder from 'components/DraftkitPagePlaceholder';
+
+export default function Page({}) {
+  return (
+    <DraftkitPagePlaceholder
+      title={`League / Player Details`}
+      note="Placeholder for DraftKit — navigation works, page content coming soon."
+    />
+  );
+}

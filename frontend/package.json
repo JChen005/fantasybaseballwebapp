@@ -1,0 +1,26 @@
+{
+  "name": "@draftkit/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DraftKit frontend for DraftKit barebones scaffold",
+  "scripts": {
+    "dev": "node ./scripts/run-next.mjs dev --webpack",
+    "build": "node ./scripts/run-next.mjs build --webpack",
+    "build:webpack": "node ./scripts/run-next.mjs build --webpack",
+    "start": "node ./scripts/run-next.mjs start",
+    "test": "node --test",
+    "lint": "node -e \"console.log('No lint rules configured for @draftkit/frontend')\""
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "framer-motion": "^12.34.5",
+    "lucide-react": "^0.576.0",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.11",
+    "tailwindcss": "^4.1.11"
+  }
+}
