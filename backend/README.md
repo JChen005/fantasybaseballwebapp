@@ -8,8 +8,6 @@ Required integration envs:
 - `PLAYER_API_LICENSE_KEY`
 - `PLAYER_API_ADMIN_SECRET`
 
-Standalone Render blueprint: [`render.yaml`](render.yaml)
-
 ## Core API
 
 - `GET /api/health`
@@ -36,6 +34,6 @@ Standalone Render blueprint: [`render.yaml`](render.yaml)
 ## API Center Endpoints
 
 - `GET /api/api-center/license-status`
-- `GET /api/api-center/transactions/stream` (SSE proxy)
+- `GET /api/api-center/transactions/stream`
 - `POST /api/api-center/admin/mock-transaction`
 - `POST /api/api-center/admin/sync`
