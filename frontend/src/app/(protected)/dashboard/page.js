@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { draftkitApi } from 'lib/draftkitApi';
-import { playerApi } from 'lib/playerApi';
 
 export default function DashboardPage() {
   const [leagues, setLeagues] = useState([]);
   const [name, setName] = useState('My League');
   const [error, setError] = useState('');
-  const [health, setHealth] = useState({ draftkit: 'checking...', playerApi: 'checking...' });
+  const [health, setHealth] = useState({ draftkit: 'checking...', playerApi: 'n/a' });
   const [creatingLeague, setCreatingLeague] = useState(false);
   const [deletingLeagueId, setDeletingLeagueId] = useState('');
 
@@ -34,11 +33,11 @@ export default function DashboardPage() {
 
     loadDashboard();
 
-    Promise.allSettled([draftkitApi.health(), playerApi.health()]).then((results) => {
+    Promise.allSettled([draftkitApi.health()]).then((results) => {
       if (cancelled) return;
       setHealth({
         draftkit: results[0].status === 'fulfilled' ? 'ok' : 'error',
-        playerApi: results[1].status === 'fulfilled' ? 'ok' : 'error',
+        playerApi: 'on-demand',
       });
     });
 
