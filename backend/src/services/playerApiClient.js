@@ -2,6 +2,8 @@ const axios = require('axios');
 const { AppError } = require('../utils/appError');
 
 const REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_RETRY_DELAY_MS = 300;
+const MAX_RETRY_DELAY_MS = 5000;
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -88,6 +90,40 @@ function normalizeUpstreamError(error) {
   return new AppError('Failed to reach Player API', 502);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function parseRetryAfterMs(value) {
+  if (value == null) return null;
+
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  const seconds = Number(normalized);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1000);
+  }
+
+  const retryAt = Date.parse(normalized);
+  if (Number.isNaN(retryAt)) {
+    return null;
+  }
+
+  return Math.max(0, retryAt - Date.now());
+}
+
+function computeRetryDelayMs(attempt, retryAfterHeader) {
+  const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+  if (retryAfterMs != null) {
+    return Math.min(MAX_RETRY_DELAY_MS, retryAfterMs);
+  }
+
+  return Math.min(MAX_RETRY_DELAY_MS, DEFAULT_RETRY_DELAY_MS * (2 ** attempt));
+}
+
 async function executeUpstream({
   path,
   method = 'GET',
@@ -98,24 +134,36 @@ async function executeUpstream({
   responseType = 'text',
   signal,
   timeout = REQUEST_TIMEOUT_MS,
+  retries = 0,
+  retryOnStatuses = [],
 }) {
   const url = buildUrl(path, query);
   const includeJson = body != null;
+  const retryableStatuses = new Set(retryOnStatuses);
 
-  try {
-    return await axios({
-      url,
-      method,
-      signal,
-      timeout,
-      responseType,
-      headers: buildHeaders({ includeLicense, includeAdminSecret, includeJson }),
-      data: body == null ? undefined : body,
-      validateStatus: () => true,
-      ...(responseType === 'text' ? { transformResponse: [(value) => value] } : {}),
-    });
-  } catch (error) {
-    throw normalizeUpstreamError(error);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const response = await axios({
+        url,
+        method,
+        signal,
+        timeout,
+        responseType,
+        headers: buildHeaders({ includeLicense, includeAdminSecret, includeJson }),
+        data: body == null ? undefined : body,
+        validateStatus: () => true,
+        ...(responseType === 'text' ? { transformResponse: [(value) => value] } : {}),
+      });
+
+      if (attempt >= retries || !retryableStatuses.has(response.status)) {
+        return response;
+      }
+
+      const waitMs = computeRetryDelayMs(attempt, response.headers?.['retry-after']);
+      await delay(waitMs);
+    } catch (error) {
+      throw normalizeUpstreamError(error);
+    }
   }
 }
 
