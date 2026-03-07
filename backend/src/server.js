@@ -3,12 +3,17 @@ require('dotenv').config();
 const app = require('./app');
 const { connectDb } = require('./config/db');
 const { validateBackendEnv } = require('./config/env');
+const { ensureSeedData } = require('./services/seedService');
 
 const port = Number(process.env.PORT || 4040);
 
 async function bootstrap() {
   validateBackendEnv();
   await connectDb();
+  const seedResult = await ensureSeedData();
+  console.log(
+    `Player catalog ready (count=${seedResult.count}, inserted=${seedResult.inserted}, skipped=${seedResult.skipped})`
+  );
   const server = app.listen(port, () => {
     console.log(`draftkit-backend listening on ${port}`);
   });

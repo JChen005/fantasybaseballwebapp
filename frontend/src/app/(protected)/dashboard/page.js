@@ -37,7 +37,7 @@ export default function DashboardPage() {
       if (cancelled) return;
       setHealth({
         draftkit: results[0].status === 'fulfilled' ? 'ok' : 'error',
-        playerApi: 'on-demand',
+        playerApi: 'embedded',
       });
     });
 
@@ -95,7 +95,7 @@ export default function DashboardPage() {
       <div className="panel">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="text-sm text-slate-600">
-          Services: DraftKit API <strong>{health.draftkit}</strong> | Player API <strong>{health.playerApi}</strong>
+          Services: DraftKit API <strong>{health.draftkit}</strong> | Player Catalog <strong>{health.playerApi}</strong>
         </p>
         <p className="text-xs text-slate-500">{leagueCountLabel}</p>
       </div>

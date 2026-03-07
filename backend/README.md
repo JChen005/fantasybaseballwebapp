@@ -4,9 +4,13 @@ Fantasy Baseball Full-stack DraftKit App Backend
 
 Required integration envs:
 
-- `PLAYER_API_BASE_URL`
 - `PLAYER_API_LICENSE_KEY`
-- `PLAYER_API_ADMIN_SECRET`
+- `PLAYER_API_LICENSE_CONSUMER` (optional; defaults to `DraftKit Web App`)
+
+Player catalog note:
+
+- The backend seeds player data locally from CSV files on startup and serves it directly from the DraftKit backend.
+- This avoids a separate public Render-to-Render player API hop while preserving the licensed-data behavior in app code.
 
 ## Core API
 
