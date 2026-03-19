@@ -49,7 +49,7 @@ export default function Page() {
     <section className="space-y-4">
       <div className="panel">
         <h1 className="text-2xl font-semibold">League / Draft</h1>
-        <p className="mt-1 text-sm text-slate-600">Players loaded from the DraftKit backend player catalog.</p>
+        <p className="mt-1 text-sm text-slate-600">Players loaded directly from Player API.</p>
       </div>
 
       <div className="panel overflow-x-auto">

@@ -8,7 +8,7 @@ export default function DashboardPage() {
   const [leagues, setLeagues] = useState([]);
   const [name, setName] = useState('My League');
   const [error, setError] = useState('');
-  const [health, setHealth] = useState({ draftkit: 'checking...', playerApi: 'n/a' });
+  const [draftkitHealth, setDraftkitHealth] = useState('checking...');
   const [creatingLeague, setCreatingLeague] = useState(false);
   const [deletingLeagueId, setDeletingLeagueId] = useState('');
 
@@ -33,13 +33,16 @@ export default function DashboardPage() {
 
     loadDashboard();
 
-    Promise.allSettled([draftkitApi.health()]).then((results) => {
-      if (cancelled) return;
-      setHealth({
-        draftkit: results[0].status === 'fulfilled' ? 'ok' : 'error',
-        playerApi: 'embedded',
-      });
-    });
+    draftkitApi.health().then(
+      () => {
+        if (cancelled) return;
+        setDraftkitHealth('ok');
+      },
+      () => {
+        if (cancelled) return;
+        setDraftkitHealth('error');
+      }
+    );
 
     return () => {
       cancelled = true;
@@ -94,9 +97,7 @@ export default function DashboardPage() {
     <section className="space-y-4">
       <div className="panel">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-slate-600">
-          Services: DraftKit API <strong>{health.draftkit}</strong> | Player Catalog <strong>{health.playerApi}</strong>
-        </p>
+        <p className="text-sm text-slate-600">DraftKit API <strong>{draftkitHealth}</strong></p>
         <p className="text-xs text-slate-500">{leagueCountLabel}</p>
       </div>
 

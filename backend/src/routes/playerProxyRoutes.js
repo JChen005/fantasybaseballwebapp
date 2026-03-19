@@ -2,14 +2,7 @@ const express = require('express');
 
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
-const {
-  listPlayers,
-  searchPlayers,
-  getPlayerById,
-  getPlayerTransactions,
-  getLeagueAverages,
-  getOpenApiDoc,
-} = require('../services/playerService');
+const { callPlayerApi } = require('../services/playerApiClient');
 const {
   parseLimit,
   parseLeagueType,
@@ -23,7 +16,7 @@ const inFlight = new Map();
 
 const CACHE_TTLS_MS = {
   health: 30_000,
-  players: 24 * 60 * 60 * 1000,
+  players: 120_000,
   leagueAverages: 24 * 60 * 60 * 1000,
 };
 
@@ -45,6 +38,11 @@ function getFreshCache(key) {
   return entry.payload;
 }
 
+function getAnyCache(key) {
+  const entry = responseCache.get(key);
+  return entry ? entry.payload : null;
+}
+
 function setCache(key, payload, ttlMs) {
   responseCache.set(key, {
     expiresAt: Date.now() + ttlMs,
@@ -55,7 +53,7 @@ function setCache(key, payload, ttlMs) {
 async function proxyWithCache({
   key,
   ttlMs,
-  requestHandler,
+  upstreamRequest,
 }) {
   const fresh = getFreshCache(key);
   if (fresh) return fresh;
@@ -64,9 +62,19 @@ async function proxyWithCache({
   if (existingRequest) return existingRequest;
 
   const request = (async () => {
-    const data = await requestHandler();
-    setCache(key, data, ttlMs);
-    return data;
+    const result = await upstreamRequest();
+
+    if (result.ok) {
+      setCache(key, result, ttlMs);
+      return result;
+    }
+
+    if (result.status === 429) {
+      const cached = getAnyCache(key);
+      if (cached) return cached;
+    }
+
+    return result;
   })();
 
   inFlight.set(key, request);
@@ -80,16 +88,16 @@ async function proxyWithCache({
 router.get(
   '/health',
   asyncHandler(async (req, res) => {
-    const data = await proxyWithCache({
+    const result = await proxyWithCache({
       key: 'health',
       ttlMs: CACHE_TTLS_MS.health,
-      requestHandler: async () => ({
-        status: 'ok',
-        service: 'draftkit-player-catalog',
-        timestamp: new Date().toISOString(),
-      }),
+      upstreamRequest: () =>
+        callPlayerApi({
+          path: '/v1/health',
+          includeLicense: false,
+        }),
     });
-    res.json(data);
+    res.status(result.status).json(result.data);
   })
 );
 
@@ -98,14 +106,16 @@ router.get(
   asyncHandler(async (req, res) => {
     const limit = parseLimit(req.query.limit, 200);
     const leagueType = parseLeagueType(req.query.leagueType);
-    const data = await proxyWithCache({
-      key: cacheKey('/players', { limit, leagueType }),
+    const result = await proxyWithCache({
+      key: cacheKey('/v1/players', { limit, leagueType }),
       ttlMs: CACHE_TTLS_MS.players,
-      requestHandler: async () => ({
-        players: await listPlayers({ limit, leagueType }),
-      }),
+      upstreamRequest: () =>
+        callPlayerApi({
+          path: '/v1/players',
+          query: { ...req.query, limit, leagueType },
+        }),
     });
-    res.json(data);
+    res.status(result.status).json(result.data);
   })
 );
 
@@ -113,8 +123,11 @@ router.get(
   '/players/search',
   asyncHandler(async (req, res) => {
     const query = parseSearchQuery(req.query);
-    const players = await searchPlayers(query);
-    res.json({ players });
+    const result = await callPlayerApi({
+      path: '/v1/players/search',
+      query,
+    });
+    res.status(result.status).json(result.data);
   })
 );
 
@@ -122,8 +135,10 @@ router.get(
   '/players/:playerId/transactions',
   asyncHandler(async (req, res) => {
     const playerId = validatePlayerId(req.params.playerId);
-    const data = await getPlayerTransactions(playerId);
-    res.json(data);
+    const result = await callPlayerApi({
+      path: `/v1/players/${playerId}/transactions`,
+    });
+    res.status(result.status).json(result.data);
   })
 );
 
@@ -131,25 +146,37 @@ router.get(
   '/players/:playerId',
   asyncHandler(async (req, res) => {
     const playerId = validatePlayerId(req.params.playerId);
-    const player = await getPlayerById(playerId);
-    res.json({ player });
+    const result = await callPlayerApi({
+      path: `/v1/players/${playerId}`,
+    });
+    res.status(result.status).json(result.data);
   })
 );
 
 router.get(
   '/stats/league-averages',
   asyncHandler(async (req, res) => {
-    const data = await proxyWithCache({
+    const result = await proxyWithCache({
       key: 'league-averages',
       ttlMs: CACHE_TTLS_MS.leagueAverages,
-      requestHandler: getLeagueAverages,
+      upstreamRequest: () =>
+        callPlayerApi({
+          path: '/v1/stats/league-averages',
+        }),
     });
-    res.json(data);
+    res.status(result.status).json(result.data);
   })
 );
 
-router.get('/docs/openapi', (req, res) => {
-  res.json(getOpenApiDoc());
-});
+router.get(
+  '/docs/openapi',
+  asyncHandler(async (req, res) => {
+    const result = await callPlayerApi({
+      path: '/v1/docs/openapi',
+      includeLicense: false,
+    });
+    res.status(result.status).json(result.data);
+  })
+);
 
 module.exports = router;

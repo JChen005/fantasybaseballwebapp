@@ -16,7 +16,6 @@ function get(path) {
 }
 
 export const playerApi = {
-  health: () => get("/api/player/health"),
   listPlayers: ({ limit = 250, leagueType = null } = {}) =>
     get(`/api/player/players?${buildQuery({ limit, leagueType })}`),
 };

@@ -13,11 +13,11 @@ const { getFrontendOrigins } = require('./config/env');
 
 const app = express();
 
-const allowedOrigins = getFrontendOrigins();
-
 app.use(
   cors({
     origin(origin, callback) {
+      const allowedOrigins = getFrontendOrigins();
+
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }

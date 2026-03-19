@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: draftkit-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: MONGODB_URI
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: PLAYER_API_BASE_URL
+        sync: false
+      - key: PLAYER_API_LICENSE_KEY
+        sync: false
+      - key: PLAYER_API_ADMIN_SECRET
+        sync: false

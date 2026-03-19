@@ -1,47 +1,44 @@
 const mongoose = require('mongoose');
-
 const { AppError } = require('../utils/appError');
 
-function clamp(number, min, max) {
-  return Math.min(Math.max(number, min), max);
-}
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const ALLOWED_LEAGUE_TYPES = new Set(['AL', 'NL', 'MIXED']);
+const SEARCH_QUERY_MAX_LENGTH = 120;
 
 function parseLimit(rawLimit, fallback = 200) {
   const parsed = Number(rawLimit ?? fallback);
-  if (!Number.isFinite(parsed)) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new AppError('limit must be a number', 400);
   }
-  return clamp(Math.floor(parsed), 1, 500);
+
+  return Math.min(500, Math.floor(parsed));
 }
 
 function parseLeagueType(rawLeagueType) {
   if (rawLeagueType == null || rawLeagueType === '') return null;
+
   const normalized = String(rawLeagueType).trim().toUpperCase();
-  if (normalized === 'MIXED') return null;
-  if (normalized !== 'AL' && normalized !== 'NL') {
-    throw new AppError('leagueType must be AL, NL, MIXED, or omitted', 400);
+  if (!ALLOWED_LEAGUE_TYPES.has(normalized)) {
+    throw new AppError('leagueType must be AL, NL, or MIXED', 400);
   }
+
   return normalized;
 }
 
 function parseSearchQuery(query = {}) {
-  const includeDrafted = String(query.includeDrafted ?? 'true').toLowerCase() === 'true';
   const limit = parseLimit(query.limit, 200);
   const leagueType = parseLeagueType(query.leagueType);
+  const includeDrafted = String(query.includeDrafted ?? '').toLowerCase() === 'true';
+  const trimmedQuery = String(query.q ?? '').trim();
 
-  const raw = String(query.q ?? '').trim();
-  const q = raw.length > 80 ? raw.slice(0, 80) : raw;
+  if (trimmedQuery.length > SEARCH_QUERY_MAX_LENGTH) {
+    throw new AppError(`q must be at most ${SEARCH_QUERY_MAX_LENGTH} characters`, 400);
+  }
 
   return {
+    q: trimmedQuery,
     includeDrafted,
     limit,
     leagueType,
-    q,
-    escapedQuery: q ? escapeRegex(q) : '',
   };
 }
 
