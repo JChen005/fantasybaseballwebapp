@@ -1,6 +1,6 @@
-const app = require('../src/app');
-const { connectDb } = require('../src/config/db');
-const { validateBackendEnv } = require('../src/config/env');
+const app = require("../src/app");
+const { connectDb } = require("../src/config/db");
+const { validateBackendEnv } = require("../src/config/env");
 
 let readyPromise;
 
