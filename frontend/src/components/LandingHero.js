@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import BrandMark from "components/BrandMark";
 
 const VIDEO_SRC = "/videos/baseball-hero.mp4";
 
@@ -25,31 +26,6 @@ function FadeUp({ children, className = "", delay = 0, reducedMotion = false }) 
     >
       {children}
     </motion.div>
-  );
-}
-
-function BrandMark() {
-  return (
-    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-sm bg-[#1c2231] shadow-[0_10px_24px_rgba(0,0,0,0.2)]">
-      <svg
-        viewBox="0 0 44 44"
-        aria-hidden="true"
-        className="h-full w-full"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <rect width="44" height="44" fill="#1C2231" />
-        <path
-          d="M9 9H22.5C30.8 9 35 13.1 35 22C35 30.9 30.8 35 22.5 35H9V28.5H15.2V15.5H9V9Z"
-          fill="#D8DEE9"
-        />
-        <path
-          d="M22.2 15.2H17.8V28.8H22.2C26.7 28.8 29.2 26.4 29.2 22C29.2 17.6 26.7 15.2 22.2 15.2Z"
-          fill="#1C2231"
-        />
-        <path d="M21.8 9L31.5 9L22.8 19.5H13.2L21.8 9Z" fill="#1C2231" />
-      </svg>
-    </div>
   );
 }
 
@@ -91,9 +67,9 @@ export default function LandingHero() {
           </div>
 
           <nav className="flex items-center gap-5 text-sm text-white/78">
-            <a className="rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white" href="#about">
+            <Link className="rounded-full px-4 py-2 transition hover:bg-white/10 hover:text-white" href="/about">
               About
-            </a>
+            </Link>
             <Link
               href="/login"
               className="rounded-full bg-white/10 px-4 py-2 font-medium text-white transition hover:bg-white/16"
@@ -108,32 +84,44 @@ export default function LandingHero() {
             <FadeUp
               delay={0.1}
               reducedMotion={reducedMotion}
-              className="rounded-[26px] border border-white/10 bg-[linear-gradient(180deg,rgba(12,20,34,0.8),rgba(8,13,24,0.68))] px-6 py-6 shadow-[0_26px_80px_rgba(0,0,0,0.32)] backdrop-blur-xl sm:px-7 sm:py-7"
+              className="relative overflow-hidden rounded-[26px] border border-white/14 bg-[linear-gradient(135deg,rgba(10,18,30,0.22),rgba(10,16,28,0.12)_58%,rgba(109,223,255,0.06))] px-6 py-6 shadow-[0_18px_46px_rgba(4,8,18,0.2),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-lg sm:px-7 sm:py-7"
             >
-              <h1 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-white sm:text-5xl lg:text-[3.9rem]">
-                Win your draft with a board built for every round.
-              </h1>
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(134,236,255,0.08),transparent_32%)]" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/10" />
 
-              <p className="mt-5 max-w-3xl text-[15px] leading-8 text-white/82 sm:text-[17px]">
-                DraftElite gives fantasy baseball managers one place to set league rules, track
-                keeper cost, scan player values, and stay organized when the draft starts moving
-                fast.
-              </p>
+              <div className="relative">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/68">
+                  DraftElite
+                </p>
 
-              <ul className="mt-6 space-y-3 text-sm text-white/78">
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                  <span>League-specific draft prep with keeper, main draft, and taxi-round context.</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                  <span>Player API integration for live search, value snapshots, and fast board reads.</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                  <span>Secure account sessions so each league workspace stays private and persistent.</span>
-                </li>
-              </ul>
+                <h1 className="mt-5 max-w-3xl text-[3.2rem] font-medium leading-[1.04] tracking-[-0.05em] text-white sm:text-[4.2rem] lg:text-[4.55rem]">
+                  <span className="block">Win Your Draft</span>
+                  <span className="block">
+                    Round by <span className="font-serif italic font-normal">Round.</span>
+                  </span>
+                </h1>
+
+                <p className="mt-5 max-w-3xl text-[15px] leading-8 text-white/82 sm:text-[17px]">
+                  DraftElite gives fantasy baseball managers one place to set league rules, track
+                  keeper cost, scan player values, and stay organized when the draft starts moving
+                  fast.
+                </p>
+
+                <ul className="mt-6 space-y-3 text-sm text-white/78">
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
+                    <span>League-specific draft prep with keeper, main draft, and taxi-round context.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
+                    <span>Player API integration for live search, value snapshots, and fast board reads.</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
+                    <span>Secure account sessions so each league workspace stays private and persistent.</span>
+                  </li>
+                </ul>
+              </div>
             </FadeUp>
 
             <FadeUp delay={0.18} reducedMotion={reducedMotion} className="mt-6 flex flex-wrap gap-3">

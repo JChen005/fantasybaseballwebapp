@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'DraftKit',
-  description: 'Draft assistant with keeper, draft, taxi rounds, and API center',
+  title: 'DraftElite',
+  description: 'Fantasy baseball draft assistant with keeper, draft, taxi rounds, and API center',
 };
 
 export default function RootLayout({ children }) {
