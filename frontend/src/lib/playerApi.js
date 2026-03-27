@@ -16,6 +16,6 @@ function get(path) {
 }
 
 export const playerApi = {
-  listPlayers: ({ limit = 250, leagueType = null } = {}) =>
-    get(`/api/player/players?${buildQuery({ limit, leagueType })}`),
+  listPlayers: ({ limit = 250, leagueType = null, includeInactive = false } = {}) =>
+    get(`/api/player/players?${buildQuery({ limit, leagueType, includeInactive })}`),
 };

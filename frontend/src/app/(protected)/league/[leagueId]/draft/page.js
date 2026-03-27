@@ -5,13 +5,14 @@ import { playerApi } from 'lib/playerApi';
 
 function toRow(player) {
   return {
-    id: player._id,
+    id: String(player.mlbPlayerId || player._id),
     name: player.name,
     team: player.team,
-    position: player.positions.join(','),
-    avg2025: player.statsLastYear.avg.toFixed(3),
+    position: player.positions.join(', '),
+    avgLastYear: player.statsLastYear.avg.toFixed(3),
     avg3yr: player.stats3Year.avg.toFixed(3),
-    avgProj: player.statsProjection.avg.toFixed(3),
+    mlbPlayerId: player.mlbPlayerId,
+    headshotUrl: player.headshotUrl,
   };
 }
 
@@ -65,20 +66,34 @@ export default function Page() {
                 <th className="px-2 py-2 font-medium">Player</th>
                 <th className="px-2 py-2 font-medium">Team</th>
                 <th className="px-2 py-2 font-medium">Pos</th>
-                <th className="px-2 py-2 font-medium">AVG (2025)</th>
+                <th className="px-2 py-2 font-medium">AVG (Last Year)</th>
                 <th className="px-2 py-2 font-medium">AVG (3YR)</th>
-                <th className="px-2 py-2 font-medium">AVG (Proj)</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-200/70">
-                  <td className="px-2 py-2 font-medium">{row.name}</td>
+                  <td className="px-2 py-2 font-medium">
+                    <div className="flex items-center gap-3">
+                      {row.headshotUrl ? (
+                        <img
+                          src={row.headshotUrl}
+                          alt={row.name}
+                          className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                        />
+                      ) : null}
+                      <div>
+                        <div>{row.name}</div>
+                        {row.mlbPlayerId ? (
+                          <div className="text-xs font-normal text-slate-500">MLB ID: {row.mlbPlayerId}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-2 py-2">{row.team}</td>
                   <td className="px-2 py-2">{row.position}</td>
-                  <td className="px-2 py-2">{row.avg2025}</td>
+                  <td className="px-2 py-2">{row.avgLastYear}</td>
                   <td className="px-2 py-2">{row.avg3yr}</td>
-                  <td className="px-2 py-2">{row.avgProj}</td>
                 </tr>
               ))}
             </tbody>

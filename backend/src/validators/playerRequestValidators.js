@@ -28,6 +28,7 @@ function parseSearchQuery(query = {}) {
   const limit = parseLimit(query.limit, 200);
   const leagueType = parseLeagueType(query.leagueType);
   const includeDrafted = String(query.includeDrafted ?? '').toLowerCase() === 'true';
+  const includeInactive = String(query.includeInactive ?? '').toLowerCase() === 'true';
   const trimmedQuery = String(query.q ?? '').trim();
 
   if (trimmedQuery.length > SEARCH_QUERY_MAX_LENGTH) {
@@ -37,16 +38,28 @@ function parseSearchQuery(query = {}) {
   return {
     q: trimmedQuery,
     includeDrafted,
+    includeInactive,
     limit,
     leagueType,
   };
 }
 
 function validatePlayerId(playerId) {
-  if (!mongoose.isValidObjectId(playerId)) {
+  const normalized = String(playerId || '').trim();
+  if (!normalized) {
     throw new AppError('Invalid player ID', 400);
   }
-  return playerId;
+
+  if (mongoose.isValidObjectId(normalized)) {
+    return normalized;
+  }
+
+  const numericId = Number(normalized);
+  if (Number.isInteger(numericId) && numericId > 0) {
+    return normalized;
+  }
+
+  throw new AppError('Invalid player ID', 400);
 }
 
 module.exports = {
