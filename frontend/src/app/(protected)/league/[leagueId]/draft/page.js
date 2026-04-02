@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { playerApi } from 'lib/playerApi';
+import SideBar from 'components/sidebar'
 
 function toRow(player) {
   return {
@@ -48,6 +49,7 @@ export default function Page() {
 
   return (
     <section className="space-y-4">
+      <SideBar/>
       <div className="panel">
         <h1 className="text-2xl font-semibold">League / Draft</h1>
         <p className="mt-1 text-sm text-slate-600">Players loaded directly from Player API.</p>
