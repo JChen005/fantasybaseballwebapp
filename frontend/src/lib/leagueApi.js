@@ -1,0 +1,16 @@
+import { apiClient } from './apiClient';
+
+function get(path) {
+  return apiClient.get(path).then((response) => response.data);
+}
+
+function put(path, body) {
+  return apiClient.put(path, body).then((response) => response.data);
+}
+
+export const leagueApi = {
+  listLeagues: () => get('/api/leagues'),
+  getLeague: (leagueId) => get(`/api/leagues/${leagueId}`),
+  getDraftState: (leagueId) => get(`/api/leagues/${leagueId}/draft-state`),
+  updateDraftState: (leagueId, draftState) => put(`/api/leagues/${leagueId}/draft-state`, draftState),
+};

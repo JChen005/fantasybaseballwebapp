@@ -15,7 +15,12 @@ function get(path) {
   return apiClient.get(path).then((response) => response.data);
 }
 
+function post(path, body) {
+  return apiClient.post(path, body).then((response) => response.data);
+}
+
 export const playerApi = {
-  listPlayers: ({ limit = 250, leagueType = null, includeInactive = false } = {}) =>
-    get(`/api/player/players?${buildQuery({ limit, leagueType, includeInactive })}`),
+  getPlayerValuations: (payload) => post('/api/player/valuations/players', payload),
+  getTeamDepthChart: ({ teamId, season } = {}) =>
+    get(`/api/player/teams/${teamId}/depth-chart?${buildQuery({ season })}`),
 };

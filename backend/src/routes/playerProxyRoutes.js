@@ -6,8 +6,10 @@ const { callPlayerApi } = require('../services/playerApiClient');
 const {
   parseLimit,
   parseLeagueType,
+  parseSeason,
   parseSearchQuery,
   validatePlayerId,
+  validateTeamId,
 } = require('../validators/playerRequestValidators');
 
 const router = express.Router();
@@ -17,6 +19,7 @@ const inFlight = new Map();
 const CACHE_TTLS_MS = {
   health: 30_000,
   players: 120_000,
+  depthChart: 120_000,
   leagueAverages: 24 * 60 * 60 * 1000,
 };
 
@@ -106,13 +109,14 @@ router.get(
   asyncHandler(async (req, res) => {
     const limit = parseLimit(req.query.limit, 200);
     const leagueType = parseLeagueType(req.query.leagueType);
+    const includeInactive = String(req.query.includeInactive ?? '').toLowerCase() === 'true';
     const result = await proxyWithCache({
-      key: cacheKey('/v1/players', { limit, leagueType }),
+      key: cacheKey('/v1/players', { limit, leagueType, includeInactive }),
       ttlMs: CACHE_TTLS_MS.players,
       upstreamRequest: () =>
         callPlayerApi({
           path: '/v1/players',
-          query: { ...req.query, limit, leagueType },
+          query: { ...req.query, limit, leagueType, includeInactive },
         }),
     });
     res.status(result.status).json(result.data);
@@ -126,6 +130,18 @@ router.get(
     const result = await callPlayerApi({
       path: '/v1/players/search',
       query,
+    });
+    res.status(result.status).json(result.data);
+  })
+);
+
+router.post(
+  '/valuations/players',
+  asyncHandler(async (req, res) => {
+    const result = await callPlayerApi({
+      path: '/v1/valuations/players',
+      method: 'POST',
+      body: req.body || {},
     });
     res.status(result.status).json(result.data);
   })
@@ -162,6 +178,24 @@ router.get(
       upstreamRequest: () =>
         callPlayerApi({
           path: '/v1/stats/league-averages',
+        }),
+    });
+    res.status(result.status).json(result.data);
+  })
+);
+
+router.get(
+  '/teams/:teamId/depth-chart',
+  asyncHandler(async (req, res) => {
+    const teamId = validateTeamId(req.params.teamId);
+    const season = parseSeason(req.query.season);
+    const result = await proxyWithCache({
+      key: cacheKey('/v1/teams/depth-chart', { teamId, season }),
+      ttlMs: CACHE_TTLS_MS.depthChart,
+      upstreamRequest: () =>
+        callPlayerApi({
+          path: `/v1/teams/${teamId}/depth-chart`,
+          query: { season },
         }),
     });
     res.status(result.status).json(result.data);

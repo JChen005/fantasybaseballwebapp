@@ -44,6 +44,26 @@ function parseSearchQuery(query = {}) {
   };
 }
 
+function parseSeason(rawSeason) {
+  if (rawSeason == null || rawSeason === '') return undefined;
+
+  const season = Number(rawSeason);
+  if (!Number.isInteger(season) || season < 1900 || season > 3000) {
+    throw new AppError('season must be a valid year', 400);
+  }
+
+  return season;
+}
+
+function validateTeamId(teamId) {
+  const numericId = Number(teamId);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    throw new AppError('Invalid team ID', 400);
+  }
+
+  return numericId;
+}
+
 function validatePlayerId(playerId) {
   const normalized = String(playerId || '').trim();
   if (!normalized) {
@@ -65,6 +85,8 @@ function validatePlayerId(playerId) {
 module.exports = {
   parseLimit,
   parseLeagueType,
+  parseSeason,
   parseSearchQuery,
   validatePlayerId,
+  validateTeamId,
 };

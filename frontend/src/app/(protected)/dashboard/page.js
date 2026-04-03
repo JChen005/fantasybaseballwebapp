@@ -125,7 +125,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="panel">
-        <h2 className="mb-2 text-lg font-semibold">Your Leagues</h2>
+        <h2 className="mb-2 text-lg font-semibold">League List</h2>
         {leagues.length === 0 ? (
           <p className="text-sm text-slate-600">No leagues yet.</p>
         ) : (

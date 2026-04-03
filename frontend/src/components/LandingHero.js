@@ -102,9 +102,9 @@ export default function LandingHero() {
                 </h1>
 
                 <p className="mt-5 max-w-3xl text-[15px] leading-8 text-white/82 sm:text-[17px]">
-                  DraftElite gives fantasy baseball managers one place to set league rules, track
-                  keeper cost, scan player values, and stay organized when the draft starts moving
-                  fast.
+                  DraftElite gives fantasy baseball managers a clearer edge on draft day, with one
+                  place to prep league context, track roster decisions, and stay in control when
+                  the room starts moving fast.
                 </p>
 
                 <ul className="mt-6 space-y-3 text-sm text-white/78">
