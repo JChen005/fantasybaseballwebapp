@@ -47,6 +47,20 @@ router.post(
   }),
 );
 
+router.post(
+  "/:leagueId",
+  asyncHandler(async (req, res) => {  
+    const { leagueId } = req.params;
+    validateObjectId(leagueId, "league ID");
+    const league = await getLeagueForUser(leagueId, req.userId);
+    const newLeague = req.body;
+    Object.assign(league.config, newLeague);
+    await league.save();
+    await getOrCreateDraftStateForLeague(leagueId, req.userId);
+    res.send()
+  }))
+
+
 router.delete(
   "/:leagueId",
   asyncHandler(async (req, res) => {
@@ -77,5 +91,6 @@ router.put(
     res.json({ draftState });
   }),
 );
+
 
 module.exports = router;

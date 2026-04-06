@@ -21,6 +21,7 @@ async function getLeagueForUser(leagueId, userId) {
   return league;
 }
 
+
 async function deleteLeagueForUser(leagueId, userId) {
   const league = await League.findOne({ _id: leagueId, ownerId: userId });
   if (!league) {
