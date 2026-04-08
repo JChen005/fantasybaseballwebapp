@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { playerApi } from 'lib/playerApi';
 import { leagueApi } from 'lib/leagueApi';
-import SideBar from 'components/sidebar'
+import SideBar from 'components/SideBar';
 
 const MLB_DEPTH_CHART_TEAMS = [
   { id: 108, code: 'LAA', label: 'Angels' },

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { draftkitApi } from "lib/draftkitApi";
-import SideBar from "components/sidebar";
+import SideBar from "components/SideBar";
 
 const defaultConfig = {
   rosterSlots: {
@@ -29,7 +29,7 @@ const defaultConfig = {
   ],
 };
 
-export default function Page({ params }) {
+export default function Page() {
   const { leagueId } = useParams();
   const [config, setConfig] = useState(defaultConfig);
 

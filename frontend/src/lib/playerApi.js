@@ -23,4 +23,5 @@ export const playerApi = {
   getPlayerValuations: (payload) => post('/api/player/valuations/players', payload),
   getTeamDepthChart: ({ teamId, season } = {}) =>
     get(`/api/player/teams/${teamId}/depth-chart?${buildQuery({ season })}`),
+  getPlayersByName: (name = '') => get(`/api/player/players/search?${buildQuery({ q: name })}`),
 };

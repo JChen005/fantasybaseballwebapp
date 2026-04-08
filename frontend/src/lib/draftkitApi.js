@@ -31,6 +31,7 @@ export const draftkitApi = {
   logout: () => post("/api/auth/logout"),
   me: () => get("/api/auth/me"),
   getLeagues: () => get("/api/leagues"),
+  getLeague: (leagueId) => get(`/api/leagues/${leagueId}`),
   deleteLeague: (leagueId) => remove(`/api/leagues/${leagueId}`),
   createLeague: (payload) => post("/api/leagues", payload),
   updateLeague: (leagueId, payload) => post(`/api/leagues/${leagueId}`, payload),
