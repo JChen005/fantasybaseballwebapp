@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const leagueTeamSchema = new mongoose.Schema(
+  {
+    teamKey: { type: String, required: true, trim: true },
+    ownerName: { type: String, required: true, trim: true, default: '' },
+    teamName: { type: String, required: true, trim: true, default: '' },
+    budget: { type: Number, required: true, min: 0, default: 260 },
+  },
+  { _id: false }
+);
+
 const leagueSchema = new mongoose.Schema(
   {
     ownerId: {
@@ -40,9 +50,23 @@ const leagueSchema = new mongoose.Schema(
         enum: ['CATEGORY', 'POINTS'],
         default: 'CATEGORY',
       },
+      teamCount: {
+        type: Number,
+        default: 5,
+        min: 1,
+      },
       teamNames: {
         type: [String],
         default: ['My Team', "Bob's Team", "Carl's Team", "Don's Team", "Ed's Team"],
+      },
+      teams: {
+        type: [leagueTeamSchema],
+        default: [],
+      },
+      userTeamKey: {
+        type: String,
+        trim: true,
+        default: 'team-1',
       },
     },
   },
