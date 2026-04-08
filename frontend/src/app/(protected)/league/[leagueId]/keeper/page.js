@@ -148,7 +148,6 @@ function DraftBoardTable({
       playerPool,
       budgets,
     });
-    leagueApi.updateTeams(leagueId, {teams:board, budgets: budgets})
   };
 
   const currentRows = board[selectedTeam] || [];
