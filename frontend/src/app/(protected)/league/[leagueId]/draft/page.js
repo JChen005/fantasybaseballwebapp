@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { playerApi } from 'lib/playerApi';
 import { leagueApi } from 'lib/leagueApi';
 import SideBar from 'components/sidebar';
+
+const SEARCH_LIMIT = 50;
 
 const DRAFT_VIEW_TABS = [
   { id: 'draft', label: 'Draft Board' },
@@ -13,6 +16,7 @@ const DRAFT_VIEW_TABS = [
   { id: 'roster', label: 'Team Roster' },
   { id: 'budget', label: 'Budget' },
   { id: 'lookup', label: 'Player Lookup' },
+  { id: 'pool', label: 'Valuation Pool' },
   { id: 'depth', label: 'Player Depth' },
 ];
 
@@ -61,16 +65,33 @@ function getDraftViewHref(leagueId, viewId) {
   return `/league/${leagueId}/draft?view=${viewId}`;
 }
 
+function formatAverage(value) {
+  return typeof value === 'number' ? value.toFixed(3) : '---';
+}
+
 function toValuationRow(player) {
   return {
     id: String(player.mlbPlayerId || player._id),
-    name: player.name,
-    team: player.team,
-    position: player.positions.join(', '),
+    name: player.name || 'Unknown player',
+    team: player.team || 'FA',
+    position: Array.isArray(player.positions) && player.positions.length ? player.positions.join(', ') : 'N/A',
     baseValue: Math.round(player.baseValue || 0),
     marketValue: player.marketValue || 0,
     adjustedValue: player.adjustedValue || 0,
     fillsNeed: Boolean(player.fillsNeed),
+    mlbPlayerId: player.mlbPlayerId,
+    headshotUrl: player.headshotUrl,
+  };
+}
+
+function toSearchRow(player) {
+  return {
+    id: String(player.mlbPlayerId || player._id),
+    name: player.name || 'Unknown player',
+    team: player.team || 'FA',
+    position: Array.isArray(player.positions) && player.positions.length ? player.positions.join(', ') : 'N/A',
+    avgLastYear: formatAverage(player.statsLastYear?.avg),
+    avg3yr: formatAverage(player.stats3Year?.avg),
     mlbPlayerId: player.mlbPlayerId,
     headshotUrl: player.headshotUrl,
   };
@@ -111,8 +132,8 @@ function buildExcludedPlayersFromTeams(teams, userTeamKey) {
   };
 }
 
-function PlayerCell({ row }) {
-  return (
+function PlayerCell({ row, href = null }) {
+  const content = (
     <div className="flex items-center gap-3">
       {row.headshotUrl ? (
         <img
@@ -128,6 +149,16 @@ function PlayerCell({ row }) {
         ) : null}
       </div>
     </div>
+  );
+
+  if (!href) {
+    return content;
+  }
+
+  return (
+    <Link href={href} className="block rounded-lg px-1 py-1 transition hover:bg-white/5">
+      {content}
+    </Link>
   );
 }
 
@@ -146,8 +177,16 @@ export default function Page() {
   const [draftError, setDraftError] = useState('');
   const [depthError, setDepthError] = useState('');
   const [lookupQuery, setLookupQuery] = useState('');
+  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+  const [playerSearchRows, setPlayerSearchRows] = useState([]);
+  const [playerSearchError, setPlayerSearchError] = useState('');
   const [isLoadingDraft, setIsLoadingDraft] = useState(true);
   const [isLoadingDepth, setIsLoadingDepth] = useState(false);
+  const [isLoadingPlayerSearch, setIsLoadingPlayerSearch] = useState(false);
+
+  const deferredPlayerSearchQuery = useDeferredValue(playerSearchQuery);
+  const normalizedPlayerSearchQuery = deferredPlayerSearchQuery.trim();
+  const isSearchingPlayers = normalizedPlayerSearchQuery.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +196,8 @@ export default function Page() {
 
       try {
         setDraftError('');
+        setIsLoadingDraft(true);
+
         const [{ league: leagueData }, { draftState: draftStateData }] = await Promise.all([
           leagueApi.getLeague(leagueId),
           leagueApi.getDraftState(leagueId),
@@ -251,6 +292,47 @@ export default function Page() {
     };
   }, [activeView, selectedTeamId]);
 
+  useEffect(() => {
+    if (activeView !== 'lookup' || !isSearchingPlayers) {
+      setPlayerSearchRows([]);
+      setPlayerSearchError('');
+      setIsLoadingPlayerSearch(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadPlayerSearch() {
+      setIsLoadingPlayerSearch(true);
+      setPlayerSearchError('');
+
+      try {
+        const data = await playerApi.searchPlayers({
+          q: normalizedPlayerSearchQuery,
+          limit: SEARCH_LIMIT,
+          leagueType: league?.config?.leagueType || null,
+        });
+        if (cancelled) return;
+
+        setPlayerSearchRows(Array.isArray(data.players) ? data.players.map(toSearchRow) : []);
+      } catch (err) {
+        if (cancelled) return;
+        setPlayerSearchRows([]);
+        setPlayerSearchError(err.message || 'Failed to search players');
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPlayerSearch(false);
+        }
+      }
+    }
+
+    loadPlayerSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, isSearchingPlayers, normalizedPlayerSearchQuery, league?.config?.leagueType]);
+
   const teams = Array.isArray(draftState?.teams) ? draftState.teams : [];
   const picks = Array.isArray(draftState?.picks) ? draftState.picks : [];
 
@@ -317,7 +399,8 @@ export default function Page() {
             ) : null}
             {valuation ? (
               <p className="text-sm text-slate-600">
-                Remaining budget ${valuation.remainingBudget} · Max bid ${valuation.maxBid} · Remaining roster spots {valuation.remainingRosterSpots}
+                Remaining budget ${valuation.remainingBudget} · Max bid ${valuation.maxBid} · Remaining roster spots{' '}
+                {valuation.remainingRosterSpots}
               </p>
             ) : null}
           </div>
@@ -342,7 +425,7 @@ export default function Page() {
                 {rows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-200/70">
                     <td className="px-2 py-2 font-medium">
-                      <PlayerCell row={row} />
+                      <PlayerCell row={row} href={`/league/${leagueId}/players/${row.id}`} />
                     </td>
                     <td className="px-2 py-2">{row.team}</td>
                     <td className="px-2 py-2">{row.position}</td>
@@ -374,8 +457,12 @@ export default function Page() {
                   className="flex items-center justify-between gap-4 rounded-xl border border-slate-700/60 bg-slate-900/55 px-4 py-3"
                 >
                   <div>
-                    <p className="text-sm font-semibold text-white">Pick {pick.pickNumber} · {pick.playerName || pick.playerId}</p>
-                    <p className="text-xs text-slate-500">{pick.teamKey} · {pick.status || 'DRAFTED'}</p>
+                    <p className="text-sm font-semibold text-white">
+                      Pick {pick.pickNumber} · {pick.playerName || pick.playerId}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {pick.teamKey} · {pick.status || 'DRAFTED'}
+                    </p>
                   </div>
                   <p className="text-sm font-semibold text-emerald-100">${pick.cost || 0}</p>
                 </div>
@@ -402,7 +489,9 @@ export default function Page() {
                       <h3 className="text-base font-semibold text-white">{team.teamName}</h3>
                       <p className="text-xs text-slate-500">{team.playerCount} players · ${team.spentBudget} spent</p>
                     </div>
-                    <p className="text-sm font-semibold text-emerald-100">${Math.max(0, team.budget - team.spentBudget)} left</p>
+                    <p className="text-sm font-semibold text-emerald-100">
+                      ${Math.max(0, team.budget - team.spentBudget)} left
+                    </p>
                   </div>
                   {!team.players.length ? (
                     <p className="text-sm text-slate-600">No players on this roster yet.</p>
@@ -412,7 +501,9 @@ export default function Page() {
                         <div key={`${team.teamKey}-${player.playerId}`} className="flex items-center justify-between gap-3 text-sm">
                           <div>
                             <p className="font-medium text-white">{player.playerName || player.playerId}</p>
-                            <p className="text-xs text-slate-500">{player.status} {player.assignedSlots?.length ? `· ${player.assignedSlots.join(', ')}` : ''}</p>
+                            <p className="text-xs text-slate-500">
+                              {player.status} {player.assignedSlots?.length ? `· ${player.assignedSlots.join(', ')}` : ''}
+                            </p>
                           </div>
                           <p className="font-semibold text-slate-200">${player.cost || 0}</p>
                         </div>
@@ -444,12 +535,14 @@ export default function Page() {
                 <div className="space-y-3">
                   {rosterRows
                     .slice()
-                    .sort((a, b) => (b.budget - b.spentBudget) - (a.budget - a.spentBudget))
+                    .sort((a, b) => b.budget - b.spentBudget - (a.budget - a.spentBudget))
                     .map((team) => (
                       <div key={team.teamKey}>
                         <div className="mb-1 flex items-center justify-between gap-3 text-sm">
                           <span className="font-medium text-white">{team.teamName}</span>
-                          <span className="text-slate-300">${team.spentBudget} spent · ${Math.max(0, team.budget - team.spentBudget)} left</span>
+                          <span className="text-slate-300">
+                            ${team.spentBudget} spent · ${Math.max(0, team.budget - team.spentBudget)} left
+                          </span>
                         </div>
                         <div className="h-2 rounded-full bg-slate-800">
                           <div
@@ -469,14 +562,89 @@ export default function Page() {
       ) : null}
 
       {activeView === 'lookup' ? (
+        <div className="panel">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Player Lookup</h2>
+              <p className="text-sm text-slate-600">
+                Search MLB players during the draft without the valuation-pool table competing for space.
+              </p>
+            </div>
+            <label className="relative w-full lg:max-w-md">
+              <span className="mb-1 block text-sm font-medium text-white">Search all players</span>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-[2.35rem] left-3 h-4 w-4 text-slate-500"
+              />
+              <input
+                className="input pl-10"
+                type="search"
+                value={playerSearchQuery}
+                onChange={(event) => setPlayerSearchQuery(event.target.value)}
+                placeholder="Start typing a player name"
+              />
+            </label>
+          </div>
+
+          {isSearchingPlayers ? (
+            <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-3">
+              <div className="mb-3">
+                <h3 className="text-base font-semibold text-white">Player Search Results</h3>
+                <p className="text-sm text-slate-600">
+                  {league?.config?.leagueType
+                    ? `Showing ${league.config.leagueType} player matches for "${normalizedPlayerSearchQuery}".`
+                    : `Showing player matches for "${normalizedPlayerSearchQuery}".`}
+                </p>
+              </div>
+
+              {isLoadingPlayerSearch ? (
+                <p className="text-sm text-slate-600">Searching players...</p>
+              ) : playerSearchError ? (
+                <p className="text-sm text-red-600">{playerSearchError}</p>
+              ) : !playerSearchRows.length ? (
+                <p className="text-sm text-slate-600">No players matched that search. Try a different name.</p>
+              ) : (
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left">
+                      <th className="px-2 py-2 font-medium">Player</th>
+                      <th className="px-2 py-2 font-medium">Team</th>
+                      <th className="px-2 py-2 font-medium">Pos</th>
+                      <th className="px-2 py-2 font-medium">AVG (Last Year)</th>
+                      <th className="px-2 py-2 font-medium">AVG (3YR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {playerSearchRows.map((row) => (
+                      <tr key={`search-${row.id}`} className="border-b border-slate-200/70">
+                        <td className="px-2 py-2 font-medium">
+                          <PlayerCell row={row} href={`/league/${leagueId}/players/${row.id}`} />
+                        </td>
+                        <td className="px-2 py-2">{row.team}</td>
+                        <td className="px-2 py-2">{row.position}</td>
+                        <td className="px-2 py-2">{row.avgLastYear}</td>
+                        <td className="px-2 py-2">{row.avg3yr}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">Use the search box to look up players across the wider player pool.</p>
+          )}
+        </div>
+      ) : null}
+
+      {activeView === 'pool' ? (
         <div className="panel overflow-x-auto">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Player Lookup</h2>
-              <p className="text-sm text-slate-600">Search the current valuation pool without the draft-board framing.</p>
+              <h2 className="text-lg font-semibold">Valuation Pool</h2>
+              <p className="text-sm text-slate-600">Filter the current valuation pool without the draft-board framing.</p>
             </div>
             <label className="flex w-full max-w-sm flex-col gap-1 text-sm">
-              <span className="font-medium text-white">Search players</span>
+              <span className="font-medium text-white">Filter valuation pool</span>
               <input
                 className="input"
                 value={lookupQuery}
@@ -486,7 +654,7 @@ export default function Page() {
             </label>
           </div>
           {isLoadingDraft ? (
-            <p className="text-sm text-slate-600">Loading player lookup...</p>
+            <p className="text-sm text-slate-600">Loading valuation pool...</p>
           ) : draftError ? (
             <p className="text-sm text-red-600">{draftError}</p>
           ) : (
@@ -503,7 +671,7 @@ export default function Page() {
                 {lookupRows.map((row) => (
                   <tr key={`lookup-${row.id}`} className="border-b border-slate-200/70">
                     <td className="px-2 py-2 font-medium">
-                      <PlayerCell row={row} />
+                      <PlayerCell row={row} href={`/league/${leagueId}/players/${row.id}`} />
                     </td>
                     <td className="px-2 py-2">{row.team}</td>
                     <td className="px-2 py-2">{row.position}</td>
