@@ -5,9 +5,9 @@ import { useParams } from "next/navigation";
 import { leagueApi } from "lib/leagueApi";
 import { draftkitApi } from "lib/draftkitApi";
 import { playerApi } from 'lib/playerApi';
-import SideBar from "components/SideBar";
+import SideBar from "components/sidebar";
 
-const SLOT_ORDER = ["C", "1B", "2B", "3B", "CI", "MI", "SS", "OF", "U", "P"];
+const SLOT_ORDER = ["C", "B1", "B2", "B3", "SS", "OF", "UTIL", "P", "BN"];
 const CONTRACT_OPTIONS = ["F3", "F2", "F1", "S3", "S2", "S1", "X", "LX"];
 
 function buildRowPlan(rosterSlots) {
@@ -407,9 +407,6 @@ function DraftBoardTable({
                           <div className="min-w-0">
                             <div className="truncate text-sm text-black">
                               {entry.playerName}
-                            </div>
-                            <div className="truncate text-xs text-gray-600">
-                              {entry.assignedSlots?.join(", ")}
                             </div>
                           </div>
                         </div>
