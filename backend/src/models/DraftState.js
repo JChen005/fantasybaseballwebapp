@@ -84,7 +84,7 @@ const draftPickSchema = new mongoose.Schema(
     },
     round: {
       type: Number,
-      min: 1,
+      min: 0,
       default: 1,
     },
     teamKey: {

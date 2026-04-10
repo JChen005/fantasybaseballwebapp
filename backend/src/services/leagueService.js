@@ -13,6 +13,25 @@ async function createLeagueForUser(userId, name) {
   });
 }
 
+function getConfiguredTeams(league) {
+  const configuredTeams = Array.isArray(league.config?.teams) ? league.config.teams : [];
+  if (configuredTeams.length) {
+    return configuredTeams;
+  }
+
+  const budget = Number(league.config?.budget) || 260;
+  const teamNames = Array.isArray(league.config?.teamNames) && league.config.teamNames.length
+    ? league.config.teamNames
+    : ['My Team'];
+
+  return teamNames.map((teamName, index) => ({
+    teamKey: `team-${index + 1}`,
+    ownerName: index === 0 ? 'You' : `Owner ${index + 1}`,
+    teamName,
+    budget,
+  }));
+}
+
 async function getLeagueForUser(leagueId, userId) {
   const league = await League.findOne({ _id: leagueId, ownerId: userId });
   if (!league) {
@@ -32,15 +51,10 @@ async function deleteLeagueForUser(leagueId, userId) {
 }
 
 function buildDefaultTeamState(league) {
-  const budget = Number(league.config?.budget) || 260;
-  const teamNames = Array.isArray(league.config?.teamNames) && league.config.teamNames.length
-    ? league.config.teamNames
-    : ['My Team'];
-
-  return teamNames.map((teamName, index) => ({
-    teamKey: `team-${index + 1}`,
-    teamName,
-    budget,
+  return getConfiguredTeams(league).map((team) => ({
+    teamKey: team.teamKey,
+    teamName: team.teamName,
+    budget: team.budget,
     spentBudget: 0,
     filledSlots: {},
     players: [],
@@ -84,22 +98,19 @@ function normalizeFilledSlots(filledSlots = {}, rosterSlots = {}) {
 }
 
 function reconcileDraftStateWithLeague(draftState, league) {
-  const teamNames = Array.isArray(league.config?.teamNames) && league.config.teamNames.length
-    ? league.config.teamNames
-    : ['My Team'];
-  const budget = Number(league.config?.budget) || 260;
+  const configuredTeams = getConfiguredTeams(league);
   const rosterSlots = league.config?.rosterSlots || {};
   const existingTeams = Array.isArray(draftState.teams) ? draftState.teams : [];
 
-  draftState.teams = teamNames.map((teamName, index) => {
-    const teamKey = `team-${index + 1}`;
+  draftState.teams = configuredTeams.map((configuredTeam, index) => {
+    const teamKey = configuredTeam.teamKey;
     const existingTeam = existingTeams.find((team) => team.teamKey === teamKey) || existingTeams[index];
     const players = Array.isArray(existingTeam?.players) ? existingTeam.players : [];
 
     return {
       teamKey,
-      teamName,
-      budget,
+      teamName: configuredTeam.teamName,
+      budget: configuredTeam.budget,
       spentBudget: sumBudgetedPlayerCost(players),
       filledSlots: normalizeFilledSlots(existingTeam?.filledSlots, rosterSlots),
       players,
@@ -109,7 +120,7 @@ function reconcileDraftStateWithLeague(draftState, league) {
 
   const validTeamKeys = new Set(draftState.teams.map((team) => team.teamKey));
   if (!validTeamKeys.has(draftState.userTeamKey)) {
-    draftState.userTeamKey = draftState.teams[0]?.teamKey || '';
+    draftState.userTeamKey = league.config?.userTeamKey || draftState.teams[0]?.teamKey || '';
   }
   if (!validTeamKeys.has(draftState.nominationTeamKey)) {
     draftState.nominationTeamKey = '';
@@ -150,9 +161,7 @@ async function updateDraftStateForLeague(leagueId, userId, payload) {
   }
 
   const draftState = await getOrCreateDraftStateForLeague(leagueId, userId);
-  const teamNames = Array.isArray(league.config?.teamNames) && league.config.teamNames.length
-    ? league.config.teamNames
-    : ['My Team'];
+  const configuredTeams = getConfiguredTeams(league);
 
   if (payload.userTeamKey !== undefined) {
     draftState.userTeamKey = payload.userTeamKey;
@@ -164,7 +173,7 @@ async function updateDraftStateForLeague(leagueId, userId, payload) {
     draftState.currentPickNumber = payload.currentPickNumber;
   }
   if (payload.teams !== undefined) {
-    if (payload.teams.length !== teamNames.length) {
+    if (payload.teams.length !== configuredTeams.length) {
       throw new AppError('teams length must match league team count', 400);
     }
     draftState.teams = payload.teams;
@@ -179,11 +188,37 @@ async function updateDraftStateForLeague(leagueId, userId, payload) {
   return draftState;
 }
 
+async function updateLeagueConfigForUser(leagueId, userId, payload) {
+  const league = await League.findOne({ _id: leagueId, ownerId: userId });
+  if (!league) {
+    throw new AppError('League not found', 404);
+  }
+
+  if (payload.name !== undefined) {
+    league.name = payload.name;
+  }
+  league.config = {
+    ...league.config?.toObject?.(),
+    ...payload.config,
+  };
+  await league.save();
+
+  const draftState = await DraftState.findOne({ leagueId: league._id, ownerId: userId });
+  if (draftState) {
+    draftState.userTeamKey = league.config.userTeamKey || draftState.userTeamKey;
+    reconcileDraftStateWithLeague(draftState, league);
+    await draftState.save();
+  }
+
+  return league;
+}
+
 module.exports = {
   listLeaguesForUser,
   getLeagueForUser,
   createLeagueForUser,
   deleteLeagueForUser,
+  updateLeagueConfigForUser,
   getOrCreateDraftStateForLeague,
   updateDraftStateForLeague,
 };

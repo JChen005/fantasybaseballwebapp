@@ -6,7 +6,7 @@ export default function Page() {
     <>
       <SideBar />
       <DraftkitPagePlaceholder
-        title="League / Taxi"
+        title="League / Post-Draft"
         note="Placeholder for DraftKit — navigation works, page content coming soon."
       />
     </>

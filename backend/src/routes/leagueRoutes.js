@@ -5,6 +5,7 @@ const { asyncHandler } = require("../utils/asyncHandler");
 const {
   validateObjectId,
   validateLeagueName,
+  validateLeagueConfigPayload,
   validateDraftStatePayload,
 } = require("../validators/leagueValidators");
 const {
@@ -12,6 +13,7 @@ const {
   getLeagueForUser,
   createLeagueForUser,
   deleteLeagueForUser,
+  updateLeagueConfigForUser,
   getOrCreateDraftStateForLeague,
   updateDraftStateForLeague,
 } = require("../services/leagueService");
@@ -68,6 +70,17 @@ router.delete(
     validateObjectId(leagueId, "league ID");
     await deleteLeagueForUser(leagueId, req.userId);
     res.status(204).send();
+  }),
+);
+
+router.put(
+  "/:leagueId",
+  asyncHandler(async (req, res) => {
+    const { leagueId } = req.params;
+    validateObjectId(leagueId, "league ID");
+    const payload = validateLeagueConfigPayload(req.body || {});
+    const league = await updateLeagueConfigForUser(leagueId, req.userId, payload);
+    res.json({ league });
   }),
 );
 

@@ -23,6 +23,103 @@ function validateLeagueName(name) {
   return trimmed;
 }
 
+function validateLeagueConfigPayload(payload = {}) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AppError('league payload must be an object', 400);
+  }
+
+  const normalized = {};
+
+  if (payload.name !== undefined) {
+    normalized.name = validateLeagueName(payload.name);
+  }
+
+  const config = payload.config;
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new AppError('config must be an object', 400);
+  }
+
+  const leagueType = String(config.leagueType || '').trim().toUpperCase();
+  if (!['AL', 'NL', 'MIXED'].includes(leagueType)) {
+    throw new AppError('config.leagueType is invalid', 400);
+  }
+
+  const scoring = String(config.scoring || '').trim().toUpperCase();
+  if (!['CATEGORY', 'POINTS'].includes(scoring)) {
+    throw new AppError('config.scoring is invalid', 400);
+  }
+
+  const budget = Number(config.budget);
+  if (!Number.isFinite(budget) || budget <= 0) {
+    throw new AppError('config.budget must be a positive number', 400);
+  }
+
+  const teamCount = Number(config.teamCount);
+  if (!Number.isInteger(teamCount) || teamCount <= 0) {
+    throw new AppError('config.teamCount must be a positive integer', 400);
+  }
+
+  if (!config.rosterSlots || typeof config.rosterSlots !== 'object' || Array.isArray(config.rosterSlots)) {
+    throw new AppError('config.rosterSlots must be an object', 400);
+  }
+
+  const rosterSlots = {};
+  for (const [slot, rawValue] of Object.entries(config.rosterSlots)) {
+    const parsed = Number(rawValue);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      throw new AppError(`config.rosterSlots.${slot} must be a non-negative integer`, 400);
+    }
+    rosterSlots[slot] = parsed;
+  }
+
+  if (!Array.isArray(config.teams) || config.teams.length !== teamCount) {
+    throw new AppError('config.teams length must match config.teamCount', 400);
+  }
+
+  const teams = config.teams.map((team, index) => {
+    if (!team || typeof team !== 'object' || Array.isArray(team)) {
+      throw new AppError(`config.teams[${index}] must be an object`, 400);
+    }
+
+    const teamKey = String(team.teamKey || `team-${index + 1}`).trim();
+    const ownerName = String(team.ownerName || '').trim();
+    const teamName = String(team.teamName || '').trim();
+    const teamBudget = Number(team.budget);
+
+    if (!teamKey || !ownerName || !teamName) {
+      throw new AppError(`config.teams[${index}] must include teamKey, ownerName, and teamName`, 400);
+    }
+    if (!Number.isFinite(teamBudget) || teamBudget < 0) {
+      throw new AppError(`config.teams[${index}].budget must be a non-negative number`, 400);
+    }
+
+    return {
+      teamKey,
+      ownerName,
+      teamName,
+      budget: teamBudget,
+    };
+  });
+
+  const userTeamKey = String(config.userTeamKey || '').trim();
+  if (!userTeamKey || !teams.some((team) => team.teamKey === userTeamKey)) {
+    throw new AppError('config.userTeamKey must match one of config.teams', 400);
+  }
+
+  normalized.config = {
+    leagueType,
+    budget,
+    scoring,
+    teamCount,
+    rosterSlots,
+    teamNames: teams.map((team) => team.teamName),
+    teams,
+    userTeamKey,
+  };
+
+  return normalized;
+}
+
 function validateDraftStatePayload(payload = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new AppError('draft state payload must be an object', 400);
@@ -149,8 +246,8 @@ function validateDraftStatePayload(payload = {}) {
       if (!Number.isInteger(pickNumber) || pickNumber <= 0) {
         throw new AppError(`picks[${pickIndex}].pickNumber must be a positive integer`, 400);
       }
-      if (!Number.isInteger(round) || round <= 0) {
-        throw new AppError(`picks[${pickIndex}].round must be a positive integer`, 400);
+      if (!Number.isInteger(round) || round < 0 || (round === 0 && status !== 'KEEPER')) {
+        throw new AppError(`picks[${pickIndex}].round must be 0 for keepers or a positive integer`, 400);
       }
       if (!teamKey || !playerId) {
         throw new AppError(`picks[${pickIndex}] must include teamKey and playerId`, 400);
@@ -181,5 +278,6 @@ function validateDraftStatePayload(payload = {}) {
 module.exports = {
   validateObjectId,
   validateLeagueName,
+  validateLeagueConfigPayload,
   validateDraftStatePayload,
 };

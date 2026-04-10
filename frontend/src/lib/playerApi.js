@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import { apiClient } from './apiClient';
 
 function buildQuery(params) {
   const query = new URLSearchParams();
@@ -20,6 +20,24 @@ function post(path, body) {
 }
 
 export const playerApi = {
+  listPlayers: ({ limit = 250, leagueType = null, includeInactive = false } = {}) =>
+    get(`/api/player/players?${buildQuery({ limit, leagueType, includeInactive })}`),
+  searchPlayers: ({
+    q,
+    limit = 50,
+    leagueType = null,
+    includeDrafted = false,
+    includeInactive = false,
+  } = {}) =>
+    get(
+      `/api/player/players/search?${buildQuery({
+        q,
+        limit,
+        leagueType,
+        includeDrafted,
+        includeInactive,
+      })}`
+    ),
   getPlayerValuations: (payload) => post('/api/player/valuations/players', payload),
   getTeamDepthChart: ({ teamId, season } = {}) =>
     get(`/api/player/teams/${teamId}/depth-chart?${buildQuery({ season })}`),

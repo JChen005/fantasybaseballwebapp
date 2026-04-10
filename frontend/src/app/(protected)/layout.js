@@ -11,11 +11,11 @@ export default function ProtectedLayout({ children }) {
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const hasSideRail =
-    /^\/league\/[^/]+\/(?:draft(?:\/|$)|players\/[^/]+|keeper(?:\/|$)|taxi(?:\/|$)|config(?:\/|$))/.test(
+    /^\/league\/[^/]+\/(?:draft(?:\/|$)|players\/[^/]+|keeper(?:\/|$)|taxi(?:\/|$)|config(?:\/|$)|post-draft(?:\/|$))/.test(
       pathname || ''
     );
   const shellClass = `app-shell ${loading ? 'py-10' : 'py-6'} ${hasSideRail ? 'xl:max-w-none' : ''}`;
-  const contentClass = hasSideRail ? 'xl:ml-48 xl:pl-4' : '';
+  const contentClass = hasSideRail ? 'xl:ml-48 xl:pl-5' : '';
 
   useEffect(() => {
     let ignore = false;

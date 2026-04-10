@@ -12,6 +12,7 @@ function put(path, body) {
 export const leagueApi = {
   listLeagues: () => get('/api/leagues'),
   getLeague: (leagueId) => get(`/api/leagues/${leagueId}`),
+  updateLeague: (leagueId, payload) => put(`/api/leagues/${leagueId}`, payload),
   getDraftState: (leagueId) => get(`/api/leagues/${leagueId}/draft-state`),
   updateDraftState: (leagueId, draftState) => put(`/api/leagues/${leagueId}/draft-state`, draftState),
 };
