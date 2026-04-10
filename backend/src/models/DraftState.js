@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const draftedPlayerSchema = new mongoose.Schema(
   {
     playerId: {
-      type: String,
+      type: Number,
       required: true,
       trim: true,
     },
@@ -27,10 +27,14 @@ const draftedPlayerSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    assignedSlots: {
-      type: [String],
-      default: [],
+    assignedSlot: {
+      type: String,
+      default: '',
     },
+    contract: {
+      type: String, 
+      enum: ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'],
+    }
   },
   { _id: false }
 );

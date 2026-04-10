@@ -108,15 +108,14 @@ function validateDraftStatePayload(payload = {}) {
         }
 
         return {
-          playerId,
-          playerName: String(player.playerName || '').trim(),
-          cost,
-          status,
-          countsAgainstBudget: player.countsAgainstBudget !== false,
-          assignedSlots: Array.isArray(player.assignedSlots)
-            ? player.assignedSlots.map((slot) => String(slot).trim()).filter(Boolean)
-            : [],
-        };
+            playerId: Number(player.playerId),
+            playerName: String(player.playerName || '').trim(),
+            cost,
+            status,
+            countsAgainstBudget: player.countsAgainstBudget !== false,
+            assignedSlot: String(player.assignedSlot || '').trim(),
+            contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
+          };
       }) : [];
 
       return {

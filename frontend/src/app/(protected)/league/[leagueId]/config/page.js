@@ -7,15 +7,16 @@ import SideBar from "components/SideBar";
 
 const defaultConfig = {
   rosterSlots: {
-    C: 1,
-    B1: 1,
-    B2: 1,
-    B3: 1,
+    C: 2,
+    "1B": 1,
+    "2B": 1,
+    "3B": 1,
+    CI: 1,
+    MI: 1,
     SS: 1,
-    OF: 3,
-    UTIL: 1,
+    OF: 5,
+    U: 1,
     P: 9,
-    BN: 3,
   },
   leagueType: "MIXED",
   budget: 260,

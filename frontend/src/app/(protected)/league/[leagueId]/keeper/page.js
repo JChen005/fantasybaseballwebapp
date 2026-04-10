@@ -4,11 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { leagueApi } from "lib/leagueApi";
 import { draftkitApi } from "lib/draftkitApi";
-import SideBar from 'components/SideBar'
+import { playerApi } from 'lib/playerApi';
+import SideBar from "components/SideBar";
 
-
-const SLOT_ORDER = ['C', 'B1', 'B2', 'B3', 'SS', 'OF', 'UTIL', 'P', 'BN'];
-const CONTRACT_OPTIONS = ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'];
+const SLOT_ORDER = ["C", "1B", "2B", "3B", "CI", "MI", "SS", "OF", "U", "P"];
+const CONTRACT_OPTIONS = ["F3", "F2", "F1", "S3", "S2", "S1", "X", "LX"];
 
 function buildRowPlan(rosterSlots) {
   const rows = [];
@@ -25,9 +25,9 @@ function buildRowPlan(rosterSlots) {
 
 function isEntryEmpty(entry) {
   return (
-    !entry?.mlbPlayerId &&
+    !entry?.playerId &&
     !entry?.contract &&
-    (entry?.price === '' || entry?.price === null || entry?.price === undefined)
+    (entry?.cost === "" || entry?.cost === null || entry?.cost === undefined)
   );
 }
 
@@ -37,30 +37,157 @@ function findEntry(rows, slot, slotIndex) {
   );
 }
 
+function draftStateTeamsToBoard(teams = []) {
+  const nextBoard = {};
+
+  for (const team of teams) {
+    const teamName = team.teamName || team.teamKey;
+    const slotCounts = {};
+
+    nextBoard[teamName] = (team.players || []).map((player) => {
+      const slot = player.assignedSlot || "BN";
+      const slotIndex = slotCounts[slot] || 0;
+      slotCounts[slot] = slotIndex + 1;
+
+      return {
+        slot,
+        slotIndex,
+        playerId: player.playerId ?? null,
+        playerName: player.playerName || "",
+        cost: player.cost ?? "",
+        status: player.status || "KEEPER",
+        contract: player.contract || "",
+        assignedSlots: player.assignedSlot ? [player.assignedSlot] : [],
+        countsAgainstBudget:
+          typeof player.countsAgainstBudget === "boolean"
+            ? player.countsAgainstBudget
+            : true,
+      };
+    });
+  }
+
+  return nextBoard;
+}
+
+function boardToDraftStateTeams(board, existingTeams = []) {
+  return existingTeams.map((team) => {
+    const teamName = team.teamName || team.teamKey;
+    const rows = board[teamName] || [];
+
+    const players = rows
+      .filter((row) => row?.playerId)
+      .map((row) => ({
+        playerId: Number(row.playerId),
+        playerName: row.playerName || "",
+        cost:
+          row.cost === "" || row.cost === null || row.cost === undefined
+            ? 0
+            : Number(row.cost),
+        status: row.status || "KEEPER",
+        countsAgainstBudget:
+          typeof row.countsAgainstBudget === "boolean"
+            ? row.countsAgainstBudget
+            : row.status === "RESERVE" || row.status === "TAXI"
+              ? false
+              : true,
+        assignedSlot: row.slot || "",
+        contract: row.contract || undefined,
+      }));
+
+    const spentBudget = players.reduce((sum, player) => {
+      return player.countsAgainstBudget ? sum + Number(player.cost || 0) : sum;
+    }, 0);
+
+    const filledSlots = players.reduce((acc, player) => {
+      const slot = player.assignedSlot || "BN";
+      acc[slot] = Number(acc[slot] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      ...team,
+      budget: Number(team.budget || 260),
+      spentBudget,
+      filledSlots,
+      players,
+    };
+  });
+}
+
+function getDraftStatePlayerIds(teams = []) {
+  const ids = new Set();
+
+  for (const team of teams) {
+    for (const player of team.players || []) {
+      if (player?.playerId != null) {
+        ids.add(Number(player.playerId));
+      }
+    }
+  }
+
+  return Array.from(ids);
+}
+
 function DraftBoardTable({
+  draftState,
   config,
   selectedPlayer,
   leagueId,
-  initialBoard = {},
   initialPlayerPool = {},
 }) {
-  const teamNames = config?.teamNames || [];
-  const leagueBudget = Number(config?.budget || 0);
+  const teams = draftState?.teams || [];
+  const teamNames = teams.map((team) => team.teamName || team.teamKey);
 
   const rowPlan = useMemo(
     () => buildRowPlan(config?.rosterSlots || {}),
     [config]
   );
 
-  const [board, setBoard] = useState(() => initialBoard);
+  const [board, setBoard] = useState(() => draftStateTeamsToBoard(teams));
   const [playerPool, setPlayerPool] = useState(() => initialPlayerPool);
-  const [selectedTeam, setSelectedTeam] = useState(teamNames[0] || '');
+  const [selectedTeam, setSelectedTeam] = useState(teamNames[0] || "");
+
+  useEffect(() => {
+    setBoard(draftStateTeamsToBoard(teams));
+  }, [teams]);
 
   useEffect(() => {
     if (!selectedTeam || !teamNames.includes(selectedTeam)) {
-      setSelectedTeam(teamNames[0] || '');
+      setSelectedTeam(teamNames[0] || "");
     }
   }, [teamNames, selectedTeam]);
+
+  const draftStatePlayerIds = useMemo(
+    () => getDraftStatePlayerIds(teams),
+    [teams]
+  );
+
+  useEffect(() => {
+    const missingIds = draftStatePlayerIds.filter((id) => !playerPool[id]);
+
+    if (missingIds.length === 0) return;
+
+    Promise.all(missingIds.map((playerId) => playerApi.getPlayerById(playerId)))
+      .then((results) => {
+        setPlayerPool((prev) => {
+          const next = { ...prev };
+
+          for (const res of results) {
+            const player = res?.player || res;
+            const id = player?.mlbPlayerId ?? player?.playerId;
+
+            if (id != null) {
+              next[Number(id)] = player;
+            }
+          }
+
+          return next;
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to hydrate player pool from draft state", err);
+      });
+  }, [draftStatePlayerIds]);
 
   const updateEntry = (teamName, slot, slotIndex, updates) => {
     setBoard((prev) => {
@@ -75,9 +202,13 @@ function DraftBoardTable({
           : {
               slot,
               slotIndex,
-              mlbPlayerId: null,
-              contract: '',
-              price: '',
+              playerId: null,
+              playerName: "",
+              cost: "",
+              status: "KEEPER",
+              contract: "",
+              assignedSlots: [],
+              countsAgainstBudget: true,
             };
 
       const nextEntry = {
@@ -110,47 +241,72 @@ function DraftBoardTable({
 
     setPlayerPool((prev) => ({
       ...prev,
-      [selectedPlayer.mlbPlayerId]: selectedPlayer,
+      [Number(selectedPlayer.mlbPlayerId)]: selectedPlayer,
     }));
 
     updateEntry(teamName, slot, slotIndex, {
-      mlbPlayerId: selectedPlayer.mlbPlayerId,
+      playerId: Number(selectedPlayer.mlbPlayerId),
+      playerName: selectedPlayer.name || selectedPlayer.canonicalName || "",
+      status: "KEEPER",
+      assignedSlots: selectedPlayer.positions || [],
+      countsAgainstBudget: true,
     });
   };
 
   const budgets = useMemo(() => {
     const result = {};
 
-    for (const teamName of teamNames) {
+    for (const team of teams) {
+      const teamName = team.teamName || team.teamKey;
       const rows = board[teamName] || [];
-      let spent = 0;
+      const budget = Number(team.budget || 260);
 
+      let spent = 0;
       for (const row of rows) {
-        const price = Number(row.price);
-        if (row.price !== '' && Number.isFinite(price)) {
-          spent += price;
+        const cost = Number(row.cost);
+        const countsAgainstBudget =
+          typeof row.countsAgainstBudget === "boolean"
+            ? row.countsAgainstBudget
+            : row.status !== "RESERVE" && row.status !== "TAXI";
+
+        if (
+          countsAgainstBudget &&
+          row.cost !== "" &&
+          Number.isFinite(cost)
+        ) {
+          spent += cost;
         }
       }
 
       result[teamName] = {
+        budget,
         spent,
-        remaining: leagueBudget - spent,
+        remaining: budget - spent,
       };
     }
 
     return result;
-  }, [board, teamNames, leagueBudget]);
+  }, [board, teams]);
 
-  const handleLogBoard = () => {
-    console.log({
-      config,
-      board,
-      playerPool,
-      budgets,
-    });
+  const handleSaveBoard = async () => {
+    const updatedTeams = boardToDraftStateTeams(board, teams);
+
+    const payload = {
+      ...draftState,
+      teams: updatedTeams,
+    };
+
+    console.log("SAVING PAYLOAD", JSON.stringify(payload, null, 2));
+
+    const res = await leagueApi.updateDraftState(leagueId, payload);
+
+    if (res?.draftState) {
+      setBoard(draftStateTeamsToBoard(res.draftState.teams || []));
+    }
   };
 
   const currentRows = board[selectedTeam] || [];
+  const selectedBudget = budgets[selectedTeam];
 
   return (
     <div className="space-y-3">
@@ -169,14 +325,14 @@ function DraftBoardTable({
         </select>
 
         <div className="text-sm text-black">
-          Budget:{' '}
-          <span className={budgets[selectedTeam]?.remaining < 0 ? 'text-red-600' : ''}>
-            ${budgets[selectedTeam]?.remaining ?? leagueBudget}
+          Budget{" "}
+          <span className={selectedBudget?.remaining < 0 ? "text-red-600" : ""}>
+            ${selectedBudget?.remaining ?? 0}
           </span>
         </div>
 
-        <button type="button" className="btn btn-sm" onClick={handleLogBoard}>
-          Log Board
+        <button type="button" className="btn btn-sm" onClick={handleSaveBoard}>
+          Save Board
         </button>
       </div>
 
@@ -190,8 +346,8 @@ function DraftBoardTable({
               >
                 <div className="font-semibold">{selectedTeam}</div>
                 <div className="text-xs font-normal">
-                  Spent: ${budgets[selectedTeam]?.spent ?? 0} | Remaining: $
-                  {budgets[selectedTeam]?.remaining ?? leagueBudget}
+                  Spent: ${selectedBudget?.spent ?? 0} | Remaining: $
+                  {selectedBudget?.remaining ?? 0}
                 </div>
               </th>
             </tr>
@@ -206,7 +362,7 @@ function DraftBoardTable({
                 Contract
               </th>
               <th className="w-20 border border-gray-400 bg-gray-100 px-2 py-1 text-black">
-                Price
+                Cost
               </th>
             </tr>
           </thead>
@@ -216,14 +372,16 @@ function DraftBoardTable({
               const entry = findEntry(currentRows, slot, slotIndex) || {
                 slot,
                 slotIndex,
-                mlbPlayerId: null,
-                contract: '',
-                price: '',
+                playerId: null,
+                playerName: "",
+                cost: "",
+                status: "KEEPER",
+                contract: "",
+                assignedSlots: [],
+                countsAgainstBudget: true,
               };
 
-              const player = entry.mlbPlayerId
-                ? playerPool[entry.mlbPlayerId]
-                : null;
+              const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
 
               return (
                 <tr key={`${selectedTeam}-${slot}-${slotIndex}-${rowIndex}`}>
@@ -237,19 +395,21 @@ function DraftBoardTable({
                       onClick={() => handlePlayerClick(selectedTeam, slot, slotIndex)}
                       className="flex w-full items-center justify-between gap-2 text-left"
                     >
-                      {player ? (
+                      {entry.playerId ? (
                         <div className="flex min-w-0 items-center gap-2">
-                          <img
-                            src={player.headshotUrl}
-                            alt={player.name}
-                            className="h-8 w-8 rounded object-cover"
-                          />
+                          {player?.headshotUrl ? (
+                            <img
+                              src={player.headshotUrl}
+                              alt={entry.playerName}
+                              className="h-8 w-8 rounded object-cover"
+                            />
+                          ) : null}
                           <div className="min-w-0">
                             <div className="truncate text-sm text-black">
-                              {player.name}
+                              {entry.playerName}
                             </div>
                             <div className="truncate text-xs text-gray-600">
-                              {player.team} · {player.positions?.join(', ')}
+                              {entry.assignedSlots?.join(", ")}
                             </div>
                           </div>
                         </div>
@@ -259,12 +419,17 @@ function DraftBoardTable({
                         </span>
                       )}
 
-                      {player && (
+                      {entry.playerId && (
                         <span
                           onClick={(e) => {
                             e.stopPropagation();
                             updateEntry(selectedTeam, slot, slotIndex, {
-                              mlbPlayerId: null,
+                              playerId: null,
+                              playerName: "",
+                              assignedSlots: [],
+                              contract: "",
+                              cost: "",
+                              countsAgainstBudget: true,
                             });
                           }}
                           className="shrink-0 cursor-pointer text-xs text-red-600"
@@ -278,7 +443,7 @@ function DraftBoardTable({
                   <td className="w-20 border border-gray-300 bg-white px-1 py-1">
                     <select
                       className="select select-bordered select-xs !bg-white !text-black w-full"
-                      value={entry.contract ?? ''}
+                      value={entry.contract ?? ""}
                       onChange={(e) =>
                         updateEntry(selectedTeam, slot, slotIndex, {
                           contract: e.target.value,
@@ -298,10 +463,10 @@ function DraftBoardTable({
                     <input
                       type="number"
                       min="0"
-                      value={entry.price ?? ''}
+                      value={entry.cost ?? ""}
                       onChange={(e) =>
                         updateEntry(selectedTeam, slot, slotIndex, {
-                          price: e.target.value === '' ? '' : Number(e.target.value),
+                          cost: e.target.value === "" ? "" : Number(e.target.value),
                         })
                       }
                       className="input input-bordered input-xs !bg-white !text-black w-full text-right"
@@ -317,23 +482,56 @@ function DraftBoardTable({
   );
 }
 
-export default function Page({}) {
+export default function Page() {
   const { leagueId } = useParams();
+  const [draftState, setDraftState] = useState(null);
   const [config, setConfig] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+
   useEffect(() => {
-    draftkitApi.getLeague(leagueId).then((res) => {
-      setConfig(res.league.config);
-    });
+    Promise.all([
+      leagueApi.getDraftState(leagueId),
+      draftkitApi.getLeague(leagueId),
+    ])
+      .then(([draftStateRes, leagueRes]) => {
+        setDraftState(draftStateRes.draftState);
+        setConfig(leagueRes.league.config);
+      })
+      .catch((err) => {
+        console.error("Failed to load keeper page data", err);
+      });
   }, [leagueId]);
+
+  if (!draftState || !config) {
+    return (
+      <>
+        <SideBar
+          selectedPlayer={selectedPlayer}
+          setSelectedPlayer={setSelectedPlayer}
+        />
+        <div className="panel mb-5">
+          <h1 className="text-lg font-bold">Keeper</h1>
+        </div>
+        <div className="text-sm text-gray-600">Loading...</div>
+      </>
+    );
+  }
 
   return (
     <>
-    <SideBar selectedPlayer={selectedPlayer} setSelectedPlayer={setSelectedPlayer} />
-    <div className="panel mb-5">
+      <SideBar
+        selectedPlayer={selectedPlayer}
+        setSelectedPlayer={setSelectedPlayer}
+      />
+      <div className="panel mb-5">
         <h1 className="text-lg font-bold">Keeper</h1>
-    </div>
-    <DraftBoardTable config={config} selectedPlayer = {selectedPlayer} leagueId = {leagueId} />
+      </div>
+      <DraftBoardTable
+        draftState={draftState}
+        config={config}
+        selectedPlayer={selectedPlayer}
+        leagueId={leagueId}
+      />
     </>
   );
 }

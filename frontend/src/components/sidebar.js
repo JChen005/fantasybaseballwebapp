@@ -40,7 +40,6 @@ function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
 }
 
 export default function SideBar({selectedPlayer, setSelectedPlayer}) {
-  console.log("Selected Player in SideBar:", selectedPlayer)
   let [players, setPlayers] = useState(null);
     let pathname = usePathname();
     pathname = pathname.substring(0, pathname.lastIndexOf('/'));
