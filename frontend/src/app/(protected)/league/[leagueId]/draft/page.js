@@ -378,33 +378,11 @@ export default function Page() {
   }, [leagueId]);
 
   useEffect(() => {
-    let cancelled = false;
-
     async function loadDraftBoard() {
-      if (cancelled) return;
       await refreshDraftBoard();
     }
 
     loadDraftBoard();
-
-    function handleVisibilityRefresh() {
-      if (document.visibilityState === 'visible') {
-        loadDraftBoard();
-      }
-    }
-
-    function handleFocusRefresh() {
-      loadDraftBoard();
-    }
-
-    window.addEventListener('focus', handleFocusRefresh);
-    document.addEventListener('visibilitychange', handleVisibilityRefresh);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener('focus', handleFocusRefresh);
-      document.removeEventListener('visibilitychange', handleVisibilityRefresh);
-    };
   }, [refreshDraftBoard]);
 
   useEffect(() => {
