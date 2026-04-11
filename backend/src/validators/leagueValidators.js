@@ -204,15 +204,24 @@ function validateDraftStatePayload(payload = {}) {
           throw new AppError(`teams[${teamIndex}].players[${playerIndex}].cost must be non-negative`, 400);
         }
 
+        const assignedSlot = String(
+          player.assignedSlot
+            || (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '')
+            || ''
+        ).trim().toUpperCase();
+
         return {
-            playerId: Number(player.playerId),
-            playerName: String(player.playerName || '').trim(),
-            cost,
-            status,
-            countsAgainstBudget: player.countsAgainstBudget !== false,
-            assignedSlot: String(player.assignedSlot || '').trim(),
-            contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
-          };
+          playerId: Number(playerId),
+          playerName: String(player.playerName || '').trim(),
+          cost,
+          status,
+          countsAgainstBudget: assignedSlot !== 'BN' && status !== 'RESERVE' && status !== 'TAXI',
+          assignedSlot,
+          assignedSlots: Array.isArray(player.assignedSlots)
+            ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
+            : (assignedSlot ? [assignedSlot] : []),
+          contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
+        };
       }) : [];
 
       return {

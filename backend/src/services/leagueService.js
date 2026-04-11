@@ -68,6 +68,15 @@ function sumBudgetedPlayerCost(players = []) {
   }, 0);
 }
 
+function getPlayerAssignedSlots(player = {}) {
+  if (Array.isArray(player.assignedSlots) && player.assignedSlots.length) {
+    return player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean);
+  }
+
+  const assignedSlot = String(player.assignedSlot || '').trim().toUpperCase();
+  return assignedSlot ? [assignedSlot] : [];
+}
+
 function assertUniquePlayersAcrossTeams(teams = []) {
   const seenPlayerIds = new Map();
 
@@ -97,6 +106,45 @@ function normalizeFilledSlots(filledSlots = {}, rosterSlots = {}) {
   return normalized;
 }
 
+function deriveFilledSlotsFromPlayers(players = [], rosterSlots = {}, { strict = false } = {}) {
+  const derived = {};
+
+  for (const slot of Object.keys(rosterSlots || {})) {
+    derived[slot] = 0;
+  }
+
+  for (const player of players || []) {
+    for (const slot of getPlayerAssignedSlots(player)) {
+      if (!(slot in derived)) {
+        continue;
+      }
+
+      derived[slot] += 1;
+      if (strict && derived[slot] > (Number(rosterSlots[slot]) || 0)) {
+        throw new AppError(`Assigned slot ${slot} exceeds configured roster capacity`, 400);
+      }
+      derived[slot] = Math.min(derived[slot], Number(rosterSlots[slot]) || 0);
+    }
+  }
+
+  return derived;
+}
+
+function normalizeDraftedPlayer(player = {}) {
+  const source = typeof player?.toObject === 'function' ? player.toObject() : player;
+  const assignedSlots = getPlayerAssignedSlots(player);
+  const assignedSlot = assignedSlots[0] || '';
+
+  return {
+    ...source,
+    playerId: String(source?.playerId || '').trim(),
+    playerName: String(source?.playerName || '').trim(),
+    assignedSlot,
+    assignedSlots,
+    contract: source?.contract ? String(source.contract).trim().toUpperCase() : undefined,
+  };
+}
+
 function reconcileDraftStateWithLeague(draftState, league) {
   const configuredTeams = getConfiguredTeams(league);
   const rosterSlots = league.config?.rosterSlots || {};
@@ -105,14 +153,14 @@ function reconcileDraftStateWithLeague(draftState, league) {
   draftState.teams = configuredTeams.map((configuredTeam, index) => {
     const teamKey = configuredTeam.teamKey;
     const existingTeam = existingTeams.find((team) => team.teamKey === teamKey) || existingTeams[index];
-    const players = Array.isArray(existingTeam?.players) ? existingTeam.players : [];
+    const players = Array.isArray(existingTeam?.players) ? existingTeam.players.map(normalizeDraftedPlayer) : [];
 
     return {
       teamKey,
       teamName: configuredTeam.teamName,
       budget: configuredTeam.budget,
       spentBudget: sumBudgetedPlayerCost(players),
-      filledSlots: normalizeFilledSlots(existingTeam?.filledSlots, rosterSlots),
+      filledSlots: deriveFilledSlotsFromPlayers(players, rosterSlots),
       players,
     };
   });

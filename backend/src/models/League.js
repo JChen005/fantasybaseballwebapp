@@ -36,9 +36,9 @@ const leagueSchema = new mongoose.Schema(
       },
       rosterSlots: {
         C: { type: Number, default: 2 },
-        B1: { type: Number, default: 1 },
-        B2: { type: Number, default: 1 },
-        B3: { type: Number, default: 1 },
+        '1B': { type: Number, default: 1 },
+        '2B': { type: Number, default: 1 },
+        '3B': { type: Number, default: 1 },
         SS: { type: Number, default: 1 },
         OF: { type: Number, default: 1 },
         UTIL: { type: Number, default: 1 },

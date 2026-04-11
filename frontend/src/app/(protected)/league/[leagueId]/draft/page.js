@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { Search } from 'lucide-react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { playerApi } from 'lib/playerApi';
 import { leagueApi } from 'lib/leagueApi';
 import SideBar from 'components/sidebar';
 
 const SEARCH_LIMIT = 50;
+const DRAFT_VALUATION_LIMIT = 500;
 
 const DRAFT_VIEW_TABS = [
   { id: 'draft', label: 'Draft Board' },
@@ -69,31 +70,118 @@ function formatAverage(value) {
   return typeof value === 'number' ? value.toFixed(3) : '---';
 }
 
+function normalizeRosterSlot(position) {
+  const normalized = String(position || '').trim().toUpperCase();
+
+  if (!normalized) return '';
+  if (normalized === '1B' || normalized === '3' || normalized === 'FIRSTBASE') return '1B';
+  if (normalized === '2B' || normalized === '4' || normalized === 'SECONDBASE') return '2B';
+  if (normalized === '3B' || normalized === '5' || normalized === 'THIRDBASE') return '3B';
+  if (normalized === 'C' || normalized === '2' || normalized === 'CATCHER') return 'C';
+  if (normalized === 'SS' || normalized === '6' || normalized === 'SHORTSTOP') return 'SS';
+  if (
+    normalized === 'LF' ||
+    normalized === 'CF' ||
+    normalized === 'RF' ||
+    normalized === 'OF' ||
+    normalized === '7' ||
+    normalized === '8' ||
+    normalized === '9' ||
+    normalized === 'OUTFIELDER'
+  ) {
+    return 'OF';
+  }
+  if (
+    normalized === 'SP' ||
+    normalized === 'RP' ||
+    normalized === 'CP' ||
+    normalized === 'P' ||
+    normalized === '1' ||
+    normalized === 'PITCHER'
+  ) {
+    return 'P';
+  }
+  if (normalized === 'DH' || normalized === 'UT' || normalized === 'UTIL' || normalized === 'DESIGNATEDHITTER') {
+    return 'UTIL';
+  }
+  if (normalized === 'TWOWAYPLAYER' || normalized === 'TWP' || normalized === 'Y') return 'TWOWAYPLAYER';
+
+  return '';
+}
+
+function formatPlayerPositions(positions) {
+  const rawPositions = Array.isArray(positions) ? positions : [];
+  const normalizedPositions = new Set(rawPositions.map(normalizeRosterSlot).filter(Boolean));
+  const displayPositions = [];
+
+  if (normalizedPositions.has('C')) displayPositions.push('C');
+  if (normalizedPositions.has('1B')) displayPositions.push('1B');
+  if (normalizedPositions.has('2B')) displayPositions.push('2B');
+  if (normalizedPositions.has('3B')) displayPositions.push('3B');
+  if (normalizedPositions.has('SS')) displayPositions.push('SS');
+  if (normalizedPositions.has('OF')) displayPositions.push('OF');
+  if (normalizedPositions.has('P') || normalizedPositions.has('TWOWAYPLAYER')) displayPositions.push('P');
+
+  const hitterEligible = displayPositions.some((position) => ['C', '1B', '2B', '3B', 'SS', 'OF'].includes(position));
+  const pitcherEligible = displayPositions.includes('P');
+  if (hitterEligible || normalizedPositions.has('UTIL') || normalizedPositions.has('TWOWAYPLAYER')) {
+    if (!(pitcherEligible && !hitterEligible && !normalizedPositions.has('TWOWAYPLAYER'))) {
+      displayPositions.push('UTIL');
+    }
+  }
+
+  return displayPositions.length ? displayPositions.join(', ') : 'N/A';
+}
+
 function toValuationRow(player) {
+  const neededSlots = Array.isArray(player.neededSlots) ? player.neededSlots : [];
+
   return {
     id: String(player.mlbPlayerId || player._id),
     name: player.name || 'Unknown player',
     team: player.team || 'FA',
-    position: Array.isArray(player.positions) && player.positions.length ? player.positions.join(', ') : 'N/A',
+    position: Array.isArray(player.displayPositions) && player.displayPositions.length
+      ? player.displayPositions.join(', ')
+      : formatPlayerPositions(player.positions),
     baseValue: Math.round(player.baseValue || 0),
     marketValue: player.marketValue || 0,
     adjustedValue: player.adjustedValue || 0,
     fillsNeed: Boolean(player.fillsNeed),
+    neededSlots,
     mlbPlayerId: player.mlbPlayerId,
     headshotUrl: player.headshotUrl,
   };
 }
 
 function toSearchRow(player) {
+  const neededSlots = Array.isArray(player.neededSlots) ? player.neededSlots : [];
+
   return {
     id: String(player.mlbPlayerId || player._id),
     name: player.name || 'Unknown player',
     team: player.team || 'FA',
-    position: Array.isArray(player.positions) && player.positions.length ? player.positions.join(', ') : 'N/A',
+    position: Array.isArray(player.displayPositions) && player.displayPositions.length
+      ? player.displayPositions.join(', ')
+      : formatPlayerPositions(player.positions),
     avgLastYear: formatAverage(player.statsLastYear?.avg),
     avg3yr: formatAverage(player.stats3Year?.avg),
+    fillsNeed: Boolean(player.fillsNeed),
+    neededSlots,
     mlbPlayerId: player.mlbPlayerId,
     headshotUrl: player.headshotUrl,
+  };
+}
+
+function toDraftSearchRow(player, valuationRows = []) {
+  const fallbackRow = toSearchRow(player);
+  const matchingValuationRow = valuationRows.find((row) => String(row.id) === String(fallbackRow.id));
+
+  return {
+    ...fallbackRow,
+    adjustedValue: matchingValuationRow?.adjustedValue ?? 1,
+    marketValue: matchingValuationRow?.marketValue ?? 1,
+    fillsNeed: matchingValuationRow?.fillsNeed ?? Boolean(player.fillsNeed),
+    neededSlots: matchingValuationRow?.neededSlots ?? fallbackRow.neededSlots,
   };
 }
 
@@ -132,6 +220,48 @@ function buildExcludedPlayersFromTeams(teams, userTeamKey) {
   };
 }
 
+function getDraftContract(status = 'DRAFTED') {
+  return status === 'KEEPER' ? 'F1' : 'X';
+}
+
+function parsePositionList(positionText) {
+  return String(positionText || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function getDraftEligibleSlots(row, rosterSlots = {}) {
+  const configuredSlots = new Set(Object.keys(rosterSlots || {}));
+  return parsePositionList(row?.position).filter((slot) => configuredSlots.has(slot));
+}
+
+function getOpenCountForSlot(team, slot, rosterSlots = {}) {
+  const total = Number(rosterSlots?.[slot] || 0);
+  const filled = Number(team?.filledSlots?.[slot] || 0);
+  return Math.max(0, total - filled);
+}
+
+function getDefaultAssignedSlot(row, team, rosterSlots = {}) {
+  const eligibleSlots = getDraftEligibleSlots(row, rosterSlots);
+  const openEligibleSlot = eligibleSlots.find((slot) => getOpenCountForSlot(team, slot, rosterSlots) > 0);
+  return openEligibleSlot || eligibleSlots[0] || '';
+}
+
+function getPersistedAssignedSlots(player) {
+  if (Array.isArray(player?.assignedSlots) && player.assignedSlots.length) {
+    return player.assignedSlots.map((slot) => normalizeRosterSlot(slot)).filter(Boolean);
+  }
+
+  const assignedSlot = normalizeRosterSlot(player?.assignedSlot);
+  return assignedSlot ? [assignedSlot] : [];
+}
+
+function getDraftPickRound(currentPickNumber, teamCount) {
+  const teams = Math.max(1, Number(teamCount) || 1);
+  return Math.floor((Math.max(1, Number(currentPickNumber) || 1) - 1) / teams) + 1;
+}
+
 function PlayerCell({ row, href = null }) {
   const content = (
     <div className="flex items-center gap-3">
@@ -144,9 +274,7 @@ function PlayerCell({ row, href = null }) {
       ) : null}
       <div>
         <div>{row.name}</div>
-        {row.mlbPlayerId ? (
-          <div className="text-xs font-normal text-slate-500">MLB ID: {row.mlbPlayerId}</div>
-        ) : null}
+        <div className="text-xs font-normal text-slate-500">{row.team || 'No Team'}</div>
       </div>
     </div>
   );
@@ -177,6 +305,19 @@ export default function Page() {
   const [draftError, setDraftError] = useState('');
   const [depthError, setDepthError] = useState('');
   const [lookupQuery, setLookupQuery] = useState('');
+  const [draftTeamFilter, setDraftTeamFilter] = useState('ALL');
+  const [draftRoleFilter, setDraftRoleFilter] = useState('ALL');
+  const [draftNeedFilter, setDraftNeedFilter] = useState('ALL');
+  const [selectedDraftPlayerId, setSelectedDraftPlayerId] = useState('');
+  const [draftTargetTeamKey, setDraftTargetTeamKey] = useState('');
+  const [draftAssignedSlot, setDraftAssignedSlot] = useState('');
+  const [draftCost, setDraftCost] = useState('');
+  const [draftActionError, setDraftActionError] = useState('');
+  const [isSavingDraftAction, setIsSavingDraftAction] = useState(false);
+  const [isUndoingLastPick, setIsUndoingLastPick] = useState(false);
+  const [draftSearchRows, setDraftSearchRows] = useState([]);
+  const [draftSearchError, setDraftSearchError] = useState('');
+  const [isLoadingDraftSearch, setIsLoadingDraftSearch] = useState(false);
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
   const [playerSearchRows, setPlayerSearchRows] = useState([]);
   const [playerSearchError, setPlayerSearchError] = useState('');
@@ -188,27 +329,26 @@ export default function Page() {
   const normalizedPlayerSearchQuery = deferredPlayerSearchQuery.trim();
   const isSearchingPlayers = normalizedPlayerSearchQuery.length > 0;
 
-  useEffect(() => {
-    let cancelled = false;
+  const refreshDraftBoard = useCallback(async (options = {}) => {
+    const { silent = false } = options;
+    if (!leagueId) return;
 
-    async function loadDraftBoard() {
-      if (!leagueId) return;
-
-      try {
-        setDraftError('');
+    try {
+      setDraftError('');
+      if (!silent) {
         setIsLoadingDraft(true);
+      }
 
-        const [{ league: leagueData }, { draftState: draftStateData }] = await Promise.all([
-          leagueApi.getLeague(leagueId),
-          leagueApi.getDraftState(leagueId),
-        ]);
-        if (cancelled) return;
+      const [{ league: leagueData }, { draftState: draftStateData }] = await Promise.all([
+        leagueApi.getLeague(leagueId),
+        leagueApi.getDraftState(leagueId),
+      ]);
 
-        setLeague(leagueData);
-        setDraftState(draftStateData);
+      setLeague(leagueData);
+      setDraftState(draftStateData);
 
-        const myTeamKey = draftStateData.userTeamKey || draftStateData.teams?.[0]?.teamKey || '';
-        const { myTeamState, excludedPlayers } = buildExcludedPlayersFromTeams(draftStateData.teams, myTeamKey);
+      const myTeamKey = draftStateData.userTeamKey || draftStateData.teams?.[0]?.teamKey || '';
+      const { myTeamState, excludedPlayers } = buildExcludedPlayersFromTeams(draftStateData.teams, myTeamKey);
 
         const valuationData = await playerApi.getPlayerValuations({
           league: {
@@ -218,26 +358,32 @@ export default function Page() {
             rosterSlots: leagueData.config?.rosterSlots,
           },
           filters: {
-            limit: 40,
+            limit: DRAFT_VALUATION_LIMIT,
             includeInactive: false,
           },
           draftState: {
             excludedPlayers,
-            filledSlots: myTeamState?.filledSlots || {},
-          },
-        });
-        if (cancelled) return;
+          filledSlots: myTeamState?.filledSlots || {},
+        },
+      });
 
-        setValuation(valuationData.valuation);
-        setRows((valuationData.players || []).map(toValuationRow));
-      } catch (err) {
-        if (cancelled) return;
-        setDraftError(err.message || 'Failed to load draft board');
-      } finally {
-        if (!cancelled) {
-          setIsLoadingDraft(false);
-        }
+      setValuation(valuationData.valuation);
+      setRows((valuationData.players || []).map(toValuationRow));
+    } catch (err) {
+      setDraftError(err.message || 'Failed to load draft board');
+    } finally {
+      if (!silent) {
+        setIsLoadingDraft(false);
       }
+    }
+  }, [leagueId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDraftBoard() {
+      if (cancelled) return;
+      await refreshDraftBoard();
     }
 
     loadDraftBoard();
@@ -260,7 +406,7 @@ export default function Page() {
       window.removeEventListener('focus', handleFocusRefresh);
       document.removeEventListener('visibilitychange', handleVisibilityRefresh);
     };
-  }, [leagueId]);
+  }, [refreshDraftBoard]);
 
   useEffect(() => {
     if (activeView !== 'depth') return undefined;
@@ -311,6 +457,8 @@ export default function Page() {
           q: normalizedPlayerSearchQuery,
           limit: SEARCH_LIMIT,
           leagueType: league?.config?.leagueType || null,
+          rosterSlots: league?.config?.rosterSlots || {},
+          filledSlots: {},
         });
         if (cancelled) return;
 
@@ -333,8 +481,67 @@ export default function Page() {
     };
   }, [activeView, isSearchingPlayers, normalizedPlayerSearchQuery, league?.config?.leagueType]);
 
+  useEffect(() => {
+    if (activeView !== 'draft') return undefined;
+
+    const normalizedLookupQuery = lookupQuery.trim();
+    if (!normalizedLookupQuery) {
+      setDraftSearchRows([]);
+      setDraftSearchError('');
+      setIsLoadingDraftSearch(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadDraftSearch() {
+      setIsLoadingDraftSearch(true);
+      setDraftSearchError('');
+
+      try {
+        const data = await playerApi.searchPlayers({
+          q: normalizedLookupQuery,
+          limit: SEARCH_LIMIT,
+          leagueType: league?.config?.leagueType || null,
+          includeInactive: false,
+          rosterSlots: league?.config?.rosterSlots || {},
+          filledSlots: draftTargetTeam?.filledSlots || {},
+        });
+        if (cancelled) return;
+
+        const searchedRows = Array.isArray(data.players)
+          ? data.players.map((player) => toDraftSearchRow(player, rows))
+          : [];
+        setDraftSearchRows(searchedRows);
+      } catch (err) {
+        if (cancelled) return;
+        setDraftSearchRows([]);
+        setDraftSearchError(err.message || 'Failed to search draft players');
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDraftSearch(false);
+        }
+      }
+    }
+
+    loadDraftSearch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, league?.config?.leagueType, lookupQuery, rows]);
+
   const teams = Array.isArray(draftState?.teams) ? draftState.teams : [];
   const picks = Array.isArray(draftState?.picks) ? draftState.picks : [];
+  const draftedPlayerIds = useMemo(
+    () =>
+      new Set(
+        teams.flatMap((team) =>
+          (Array.isArray(team.players) ? team.players : []).map((player) => String(player.playerId || '').trim()).filter(Boolean)
+        )
+      ),
+    [teams]
+  );
 
   const rosterRows = useMemo(
     () =>
@@ -351,6 +558,36 @@ export default function Page() {
 
   const recentPicks = useMemo(() => [...picks].sort((a, b) => b.pickNumber - a.pickNumber).slice(0, 12), [picks]);
 
+  const rosterSlots = league?.config?.rosterSlots || {};
+  const myTeamKey = draftState?.userTeamKey || teams[0]?.teamKey || '';
+  const draftTargetTeam = teams.find((team) => team.teamKey === draftTargetTeamKey) || teams.find((team) => team.teamKey === myTeamKey) || teams[0] || null;
+  const draftTeamOptions = useMemo(() => {
+    const options = new Set(rows.map((row) => row.team).filter(Boolean));
+    return ['ALL', ...Array.from(options).sort()];
+  }, [rows]);
+  const draftRoleOptions = useMemo(() => {
+    const options = new Set(rows.flatMap((row) => parsePositionList(row.position)));
+    return ['ALL', ...Array.from(options).sort()];
+  }, [rows]);
+  const filteredDraftRows = useMemo(() => {
+    const sourceRows = lookupQuery.trim() ? draftSearchRows : rows;
+    return sourceRows.filter((row) => {
+      if (draftedPlayerIds.has(String(row.id))) return false;
+      if (draftTeamFilter !== 'ALL' && row.team !== draftTeamFilter) return false;
+      if (draftRoleFilter !== 'ALL' && !parsePositionList(row.position).includes(draftRoleFilter)) return false;
+      if (draftNeedFilter === 'YES' && !row.fillsNeed) return false;
+      if (draftNeedFilter === 'NO' && row.fillsNeed) return false;
+      return true;
+    });
+  }, [draftNeedFilter, draftRoleFilter, draftSearchRows, draftTeamFilter, draftedPlayerIds, lookupQuery, rows]);
+  const selectedDraftPlayer = filteredDraftRows.find((row) => row.id === selectedDraftPlayerId)
+    || rows.find((row) => row.id === selectedDraftPlayerId)
+    || null;
+  const draftEligibleSlots = useMemo(
+    () => getDraftEligibleSlots(selectedDraftPlayer, rosterSlots),
+    [selectedDraftPlayer, rosterSlots]
+  );
+
   const lookupRows = useMemo(() => {
     const search = lookupQuery.trim().toLowerCase();
     if (!search) return rows;
@@ -360,13 +597,201 @@ export default function Page() {
     );
   }, [lookupQuery, rows]);
 
+  useEffect(() => {
+    if (!draftTargetTeamKey) {
+      setDraftTargetTeamKey(myTeamKey);
+    }
+  }, [draftTargetTeamKey, myTeamKey]);
+
+  useEffect(() => {
+    if (!selectedDraftPlayer || !draftTargetTeam) {
+      setDraftAssignedSlot('');
+      return;
+    }
+
+    const nextSlot = getDefaultAssignedSlot(selectedDraftPlayer, draftTargetTeam, rosterSlots);
+    setDraftAssignedSlot((current) => (current && draftEligibleSlots.includes(current) ? current : nextSlot));
+  }, [draftEligibleSlots, draftTargetTeam, rosterSlots, selectedDraftPlayer]);
+
+  function handleSelectDraftPlayer(row) {
+    setSelectedDraftPlayerId(row.id);
+    setDraftActionError('');
+    setDraftCost(String(row.adjustedValue || row.marketValue || 0));
+  }
+
+  async function handleDraftPlayer() {
+    if (!selectedDraftPlayer || !draftTargetTeam) {
+      setDraftActionError('Select a player and target team.');
+      return;
+    }
+
+    if (draftedPlayerIds.has(String(selectedDraftPlayer.id))) {
+      setDraftActionError(`${selectedDraftPlayer.name} has already been drafted.`);
+      return;
+    }
+
+    const numericCost = Number(draftCost);
+    if (!Number.isFinite(numericCost) || numericCost < 0) {
+      setDraftActionError('Cost must be a non-negative number.');
+      return;
+    }
+
+    if (!draftAssignedSlot) {
+      setDraftActionError('Choose a roster slot for this player.');
+      return;
+    }
+
+    if (getOpenCountForSlot(draftTargetTeam, draftAssignedSlot, rosterSlots) <= 0) {
+      setDraftActionError(`${draftAssignedSlot} is already full for ${draftTargetTeam.teamName}.`);
+      return;
+    }
+
+    try {
+      setIsSavingDraftAction(true);
+      setDraftActionError('');
+
+      const updatedTeams = teams.map((team) => {
+        const existingPlayers = Array.isArray(team.players) ? team.players.filter((player) => String(player.playerId) !== selectedDraftPlayer.id) : [];
+        const filledSlots = { ...(team.filledSlots || {}) };
+
+        if (team.teamKey !== draftTargetTeam.teamKey) {
+          return {
+            ...team,
+            players: existingPlayers,
+          };
+        }
+
+        const assignedSlots = draftAssignedSlot ? [draftAssignedSlot] : [];
+        if (assignedSlots.length) {
+          filledSlots[draftAssignedSlot] = (Number(filledSlots[draftAssignedSlot] || 0) + 1);
+        }
+
+        const countsAgainstBudget = true;
+        const contract = getDraftContract('DRAFTED');
+        const nextPlayers = [
+          ...existingPlayers,
+          {
+            playerId: selectedDraftPlayer.id,
+            playerName: selectedDraftPlayer.name,
+            cost: numericCost,
+            status: 'DRAFTED',
+            countsAgainstBudget,
+            assignedSlot: draftAssignedSlot,
+            assignedSlots,
+            contract,
+          },
+        ];
+
+        return {
+          ...team,
+          spentBudget: nextPlayers.reduce((sum, player) => sum + (player.countsAgainstBudget === false ? 0 : Number(player.cost || 0)), 0),
+          filledSlots,
+          players: nextPlayers,
+        };
+      });
+
+      const nextPickNumber = Number(draftState?.currentPickNumber || 1);
+      const nextPicks = [
+        ...(Array.isArray(draftState?.picks) ? draftState.picks : []),
+        {
+          pickNumber: nextPickNumber,
+          round: getDraftPickRound(nextPickNumber, league?.config?.teamCount || teams.length || 1),
+          teamKey: draftTargetTeam.teamKey,
+          playerId: selectedDraftPlayer.id,
+          playerName: selectedDraftPlayer.name,
+          cost: numericCost,
+          status: 'DRAFTED',
+          timestamp: new Date().toISOString(),
+        },
+      ];
+
+      await leagueApi.updateDraftState(leagueId, {
+        userTeamKey: draftState?.userTeamKey,
+        nominationTeamKey: draftState?.nominationTeamKey,
+        currentPickNumber: nextPickNumber + 1,
+        teams: updatedTeams,
+        picks: nextPicks,
+      });
+
+      setSelectedDraftPlayerId('');
+      setDraftAssignedSlot('');
+      setDraftCost('');
+      await refreshDraftBoard({ silent: true });
+    } catch (err) {
+      setDraftActionError(err.message || 'Failed to save draft action');
+    } finally {
+      setIsSavingDraftAction(false);
+    }
+  }
+
+  async function handleUndoLastPick() {
+    const currentPicks = Array.isArray(draftState?.picks) ? draftState.picks : [];
+    const lastPick = currentPicks[currentPicks.length - 1];
+
+    if (!lastPick) {
+      setDraftActionError('No picks to undo.');
+      return;
+    }
+
+    try {
+      setIsUndoingLastPick(true);
+      setDraftActionError('');
+
+      const updatedTeams = teams.map((team) => {
+        if (team.teamKey !== lastPick.teamKey) {
+          return team;
+        }
+
+        const nextPlayers = Array.isArray(team.players) ? [...team.players] : [];
+        const playerIndex = nextPlayers.findIndex((player) => String(player.playerId) === String(lastPick.playerId));
+
+        if (playerIndex === -1) {
+          return team;
+        }
+
+        const [removedPlayer] = nextPlayers.splice(playerIndex, 1);
+        const filledSlots = { ...(team.filledSlots || {}) };
+
+        for (const slot of getPersistedAssignedSlots(removedPlayer)) {
+          filledSlots[slot] = Math.max(0, Number(filledSlots[slot] || 0) - 1);
+        }
+
+        return {
+          ...team,
+          spentBudget: nextPlayers.reduce((sum, player) => sum + (player.countsAgainstBudget === false ? 0 : Number(player.cost || 0)), 0),
+          filledSlots,
+          players: nextPlayers,
+        };
+      });
+
+      await leagueApi.updateDraftState(leagueId, {
+        userTeamKey: draftState?.userTeamKey,
+        nominationTeamKey: draftState?.nominationTeamKey,
+        currentPickNumber: Math.max(1, Number(draftState?.currentPickNumber || 1) - 1),
+        teams: updatedTeams,
+        picks: currentPicks.slice(0, -1),
+      });
+
+      if (String(selectedDraftPlayerId) === String(lastPick.playerId)) {
+        setSelectedDraftPlayerId('');
+        setDraftAssignedSlot('');
+        setDraftCost('');
+      }
+
+      await refreshDraftBoard({ silent: true });
+    } catch (err) {
+      setDraftActionError(err.message || 'Failed to undo last pick');
+    } finally {
+      setIsUndoingLastPick(false);
+    }
+  }
+
   return (
     <section className="space-y-4">
       <SideBar />
 
       <div className="panel">
         <h1 className="text-2xl font-semibold">League / Draft</h1>
-        <p className="mt-1 text-sm text-slate-600">League valuations are now built from persisted DraftState.</p>
       </div>
 
       <div className="panel">
@@ -389,55 +814,214 @@ export default function Page() {
       </div>
 
       {activeView === 'draft' ? (
-        <div className="panel overflow-x-auto">
-          <div className="mb-3 flex flex-col gap-2">
-            <h2 className="text-lg font-semibold">Draft Valuations</h2>
-            {league ? (
-              <p className="text-sm text-slate-600">
-                {league.name} · {league.config?.leagueType} · ${league.config?.budget} budget
-              </p>
-            ) : null}
-            {valuation ? (
-              <p className="text-sm text-slate-600">
-                Remaining budget ${valuation.remainingBudget} · Max bid ${valuation.maxBid} · Remaining roster spots{' '}
-                {valuation.remainingRosterSpots}
-              </p>
-            ) : null}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
+          <div className="panel">
+            <div className="mb-4 flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-lg font-semibold">Draft Board</h2>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-white">Search</span>
+                  <input
+                    className="input"
+                    value={lookupQuery}
+                    onChange={(event) => setLookupQuery(event.target.value)}
+                    placeholder="Player name, team, role"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-white">Team</span>
+                  <select className="input" value={draftTeamFilter} onChange={(event) => setDraftTeamFilter(event.target.value)}>
+                    {draftTeamOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option === 'ALL' ? 'All Teams' : option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-white">Role</span>
+                  <select className="input" value={draftRoleFilter} onChange={(event) => setDraftRoleFilter(event.target.value)}>
+                    {draftRoleOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option === 'ALL' ? 'All Roles' : option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-white">Role Need</span>
+                  <select className="input" value={draftNeedFilter} onChange={(event) => setDraftNeedFilter(event.target.value)}>
+                    <option value="ALL">All</option>
+                    <option value="YES">Need Only</option>
+                    <option value="NO">No Need</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            {isLoadingDraft ? (
+              <p className="text-sm text-slate-600">Loading draft valuations...</p>
+            ) : draftError ? (
+              <p className="text-sm text-red-600">{draftError}</p>
+            ) : isLoadingDraftSearch ? (
+              <p className="text-sm text-slate-600">Searching players...</p>
+            ) : draftSearchError ? (
+              <p className="text-sm text-red-600">{draftSearchError}</p>
+            ) : !filteredDraftRows.length ? (
+              <p className="text-sm text-slate-600">No players match the current draft filters.</p>
+            ) : (
+              <div className="max-h-[720px] overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="sticky top-0 bg-slate-950">
+                    <tr className="border-b border-slate-200 text-left">
+                      <th className="px-2 py-2 font-medium">Player</th>
+                      <th className="px-2 py-2 font-medium">Pos</th>
+                      <th className="px-2 py-2 font-medium">Value</th>
+                      <th className="px-2 py-2 font-medium">Role Need</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDraftRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        className={`cursor-pointer border-b border-slate-200/70 transition hover:bg-white/5 ${
+                          selectedDraftPlayerId === row.id ? 'bg-white/6' : ''
+                        }`}
+                        onClick={() => handleSelectDraftPlayer(row)}
+                      >
+                        <td className="px-2 py-2 font-medium">
+                          <PlayerCell row={row} />
+                        </td>
+                        <td className="px-2 py-2">{row.position}</td>
+                        <td className="px-2 py-2 font-semibold text-white">
+                          {typeof row.adjustedValue === 'number' ? `$${row.adjustedValue}` : 'N/A'}
+                        </td>
+                        <td className="px-2 py-2">
+                          {typeof row.fillsNeed === 'boolean'
+                            ? row.fillsNeed
+                              ? `Yes${row.neededSlots?.length ? ` · ${row.neededSlots.join(', ')}` : ''}`
+                              : 'No'
+                            : 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          {isLoadingDraft ? (
-            <p className="text-sm text-slate-600">Loading draft valuations...</p>
-          ) : draftError ? (
-            <p className="text-sm text-red-600">{draftError}</p>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left">
-                  <th className="px-2 py-2 font-medium">Player</th>
-                  <th className="px-2 py-2 font-medium">Team</th>
-                  <th className="px-2 py-2 font-medium">Pos</th>
-                  <th className="px-2 py-2 font-medium">Base</th>
-                  <th className="px-2 py-2 font-medium">Market</th>
-                  <th className="px-2 py-2 font-medium">Adjusted</th>
-                  <th className="px-2 py-2 font-medium">Need</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-200/70">
-                    <td className="px-2 py-2 font-medium">
-                      <PlayerCell row={row} href={`/league/${leagueId}/players/${row.id}`} />
-                    </td>
-                    <td className="px-2 py-2">{row.team}</td>
-                    <td className="px-2 py-2">{row.position}</td>
-                    <td className="px-2 py-2">{row.baseValue}</td>
-                    <td className="px-2 py-2">${row.marketValue}</td>
-                    <td className="px-2 py-2 font-semibold text-white">${row.adjustedValue}</td>
-                    <td className="px-2 py-2">{row.fillsNeed ? 'Yes' : 'No'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+
+          <div className="panel">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold">Draft Control</h2>
+              <p className="text-sm text-slate-600">Click a player from the valuation pool to populate this panel.</p>
+            </div>
+            {!selectedDraftPlayer ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/35 p-4">
+                  <p className="text-sm text-slate-500">Select a player from the pool to draft them.</p>
+                </div>
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleUndoLastPick}
+                  disabled={isUndoingLastPick || !picks.length}
+                >
+                  {isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/45 p-4">
+                  <div className="flex items-center gap-3">
+                    {selectedDraftPlayer.headshotUrl ? (
+                      <img
+                        src={selectedDraftPlayer.headshotUrl}
+                        alt={selectedDraftPlayer.name}
+                        className="h-12 w-12 rounded-full border border-slate-200 object-cover"
+                      />
+                    ) : null}
+                    <div>
+                      <h3 className="text-base font-semibold text-white">{selectedDraftPlayer.name}</h3>
+                      <p className="text-sm text-slate-500">
+                        {selectedDraftPlayer.team || 'No Team'} · {selectedDraftPlayer.position}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-white">Draft To Team</span>
+                    <select className="input" value={draftTargetTeamKey} onChange={(event) => setDraftTargetTeamKey(event.target.value)}>
+                      {teams.map((team) => (
+                        <option key={team.teamKey} value={team.teamKey}>
+                          {team.teamName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span className="font-medium text-white">Cost</span>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={draftCost}
+                        onChange={(event) => setDraftCost(event.target.value)}
+                        placeholder="0"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-white">Assigned Slot</span>
+                    <select
+                      className="input"
+                      value={draftAssignedSlot}
+                      onChange={(event) => setDraftAssignedSlot(event.target.value)}
+                      disabled={!draftEligibleSlots.length}
+                    >
+                      {!draftEligibleSlots.length ? <option value="">No eligible slots</option> : null}
+                      {draftEligibleSlots.map((slot) => {
+                        const openCount = getOpenCountForSlot(draftTargetTeam, slot, rosterSlots);
+                        return (
+                          <option key={slot} value={slot} disabled={openCount <= 0}>
+                            {slot}{openCount > 0 ? ` (${openCount} open)` : ' (full)'}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+                </div>
+
+                {draftActionError ? <p className="text-sm text-red-600">{draftActionError}</p> : null}
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleDraftPlayer}
+                    disabled={isSavingDraftAction}
+                  >
+                    {isSavingDraftAction ? 'Saving...' : 'Draft Player'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={handleUndoLastPick}
+                    disabled={isUndoingLastPick || !picks.length}
+                  >
+                    {isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -502,7 +1086,7 @@ export default function Page() {
                           <div>
                             <p className="font-medium text-white">{player.playerName || player.playerId}</p>
                             <p className="text-xs text-slate-500">
-                              {player.status} {player.assignedSlots?.length ? `· ${player.assignedSlots.join(', ')}` : ''}
+                              {player.status} {getPersistedAssignedSlots(player).length ? `· ${getPersistedAssignedSlots(player).join(', ')}` : ''}
                             </p>
                           </div>
                           <p className="font-semibold text-slate-200">${player.cost || 0}</p>
@@ -608,7 +1192,6 @@ export default function Page() {
                   <thead>
                     <tr className="border-b border-slate-200 text-left">
                       <th className="px-2 py-2 font-medium">Player</th>
-                      <th className="px-2 py-2 font-medium">Team</th>
                       <th className="px-2 py-2 font-medium">Pos</th>
                       <th className="px-2 py-2 font-medium">AVG (Last Year)</th>
                       <th className="px-2 py-2 font-medium">AVG (3YR)</th>
@@ -620,7 +1203,6 @@ export default function Page() {
                         <td className="px-2 py-2 font-medium">
                           <PlayerCell row={row} href={`/league/${leagueId}/players/${row.id}`} />
                         </td>
-                        <td className="px-2 py-2">{row.team}</td>
                         <td className="px-2 py-2">{row.position}</td>
                         <td className="px-2 py-2">{row.avgLastYear}</td>
                         <td className="px-2 py-2">{row.avg3yr}</td>

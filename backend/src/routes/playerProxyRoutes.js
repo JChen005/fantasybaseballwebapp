@@ -3,6 +3,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { callPlayerApi } = require('../services/playerApiClient');
+const { enrichPlayerForFantasyRules, parseJsonQueryParam } = require('../services/fantasyRules');
 const {
   parseLimit,
   parseLeagueType,
@@ -22,6 +23,15 @@ const CACHE_TTLS_MS = {
   depthChart: 120_000,
   leagueAverages: 24 * 60 * 60 * 1000,
 };
+
+function enrichPlayersResponse(payload, context = {}) {
+  const players = Array.isArray(payload?.players) ? payload.players : [];
+
+  return {
+    ...payload,
+    players: players.map((player) => enrichPlayerForFantasyRules(player, context)),
+  };
+}
 
 router.use(requireAuth);
 
@@ -127,23 +137,27 @@ router.get(
   '/players/search',
   asyncHandler(async (req, res) => {
     const query = parseSearchQuery(req.query);
+    const rosterSlots = parseJsonQueryParam(req.query.rosterSlots, {});
+    const filledSlots = parseJsonQueryParam(req.query.filledSlots, {});
     const result = await callPlayerApi({
       path: '/v1/players/search',
       query,
     });
-    res.status(result.status).json(result.data);
+    res.status(result.status).json(enrichPlayersResponse(result.data, { rosterSlots, filledSlots }));
   })
 );
 
 router.post(
   '/valuations/players',
   asyncHandler(async (req, res) => {
+    const rosterSlots = req.body?.league?.rosterSlots || {};
+    const filledSlots = req.body?.draftState?.filledSlots || {};
     const result = await callPlayerApi({
       path: '/v1/valuations/players',
       method: 'POST',
       body: req.body || {},
     });
-    res.status(result.status).json(result.data);
+    res.status(result.status).json(enrichPlayersResponse(result.data, { rosterSlots, filledSlots }));
   })
 );
 

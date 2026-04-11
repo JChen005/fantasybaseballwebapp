@@ -6,22 +6,22 @@ import SideBar from 'components/sidebar';
 import { leagueApi } from 'lib/leagueApi';
 
 const DEFAULT_ROSTER_SLOTS = {
-  C: 1,
-  B1: 1,
-  B2: 1,
-  B3: 1,
+  C: 2,
+  '1B': 1,
+  '2B': 1,
+  '3B': 1,
   SS: 1,
-  OF: 3,
+  OF: 1,
   UTIL: 1,
-  P: 9,
-  BN: 3,
+  P: 5,
+  BN: 1,
 };
 
 const ROSTER_SLOT_LABELS = {
   C: 'Catcher',
-  B1: 'First base',
-  B2: 'Second base',
-  B3: 'Third base',
+  '1B': 'First base',
+  '2B': 'Second base',
+  '3B': 'Third base',
   SS: 'Shortstop',
   OF: 'Outfield',
   UTIL: 'Utility',

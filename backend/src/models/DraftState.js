@@ -30,11 +30,16 @@ const draftedPlayerSchema = new mongoose.Schema(
     assignedSlot: {
       type: String,
       default: '',
+      trim: true,
+    },
+    assignedSlots: {
+      type: [String],
+      default: [],
     },
     contract: {
-      type: String, 
+      type: String,
       enum: ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'],
-    }
+    },
   },
   { _id: false }
 );
