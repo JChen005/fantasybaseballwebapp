@@ -1,32 +1,32 @@
 # DraftKit Frontend (`@draftkit/frontend`)
 
-Fantasy baseball DraftKit frontend.
+Next.js frontend for the DraftKit web application.
 
-Required env:
-
-- `NEXT_PUBLIC_DRAFTKIT_API_URL`
-
-Deployment note:
-
-- Point this frontend at the separate DraftKit backend deployment.
-
-## Current Responsibilities
+## Responsibilities
 
 - authentication pages
 - league dashboard
-- league config, keeper, taxi, and draft routes
-- draft valuation UI backed by persisted `DraftState`
-- depth-chart browser UI backed by the Player API proxy
+- league config
+- keeper board
+- draft board and draft actions
+- roster and budget views
+- player lookup and valuation pool views
+- depth-chart UI through the backend proxy
 
-The draft route currently:
+## Required Environment Variables
 
-- loads the league from the webapp backend
-- loads persisted `DraftState`
-- builds valuation exclusions from `DraftState.teams[].players`
-- requests player valuations from the backend proxy
-- renders `baseValue`, `marketValue`, `adjustedValue`, and `fillsNeed`
+- `NEXT_PUBLIC_DRAFTKIT_API_URL`
 
-## Key Pages
+## Scripts
+
+```bash
+npm run dev
+npm run build
+npm start
+npm test
+```
+
+## Key Routes
 
 - `/`
 - `/register`
@@ -37,4 +37,23 @@ The draft route currently:
 - `/league/:leagueId/draft`
 - `/league/:leagueId/players/:playerId`
 - `/league/:leagueId/taxi`
+- `/league/:leagueId/post-draft`
 - `/api-center`
+
+## Draft and Keeper Notes
+
+- draft actions operate on persisted `DraftState`
+- keeper assignments save into `DraftState.teams[].players`
+- the shared league sidebar is used on non-keeper pages
+- keeper uses its own player-selection rail
+- the UI treats role-need as a webapp-owned fantasy rule, not a Player API concern
+
+## Key Modules
+
+- `src/app/(protected)/league/[leagueId]/config/page.js`
+- `src/app/(protected)/league/[leagueId]/keeper/page.js`
+- `src/app/(protected)/league/[leagueId]/draft/page.js`
+- `src/components/sidebar.js`
+- `src/components/KeeperPlayerRail.js`
+- `src/lib/leagueApi.js`
+- `src/lib/playerApi.js`

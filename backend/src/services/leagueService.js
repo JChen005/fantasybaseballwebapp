@@ -95,17 +95,6 @@ function assertUniquePlayersAcrossTeams(teams = []) {
   }
 }
 
-function normalizeFilledSlots(filledSlots = {}, rosterSlots = {}) {
-  const normalized = {};
-
-  for (const [slot, maxCount] of Object.entries(rosterSlots || {})) {
-    const rawCount = Number(filledSlots?.[slot] || 0);
-    normalized[slot] = Math.min(Math.max(0, rawCount), Number(maxCount) || 0);
-  }
-
-  return normalized;
-}
-
 function deriveFilledSlotsFromPlayers(players = [], rosterSlots = {}, { strict = false } = {}) {
   const derived = {};
 

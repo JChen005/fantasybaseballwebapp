@@ -143,7 +143,6 @@ function toValuationRow(player) {
     position: Array.isArray(player.displayPositions) && player.displayPositions.length
       ? player.displayPositions.join(', ')
       : formatPlayerPositions(player.positions),
-    baseValue: Math.round(player.baseValue || 0),
     marketValue: player.marketValue || 0,
     adjustedValue: player.adjustedValue || 0,
     fillsNeed: Boolean(player.fillsNeed),
