@@ -1,13 +1,13 @@
-const express = require("express");
+const express = require('express');
 
-const { requireAuth } = require("../middleware/auth");
-const { asyncHandler } = require("../utils/asyncHandler");
+const { requireAuth } = require('../middleware/auth');
+const { asyncHandler } = require('../utils/asyncHandler');
 const {
   validateObjectId,
   validateLeagueName,
   validateLeagueConfigPayload,
   validateDraftStatePayload,
-} = require("../validators/leagueValidators");
+} = require('../validators/leagueValidators');
 const {
   listLeaguesForUser,
   getLeagueForUser,
@@ -16,95 +16,79 @@ const {
   updateLeagueConfigForUser,
   getOrCreateDraftStateForLeague,
   updateDraftStateForLeague,
-} = require("../services/leagueService");
+} = require('../services/leagueService');
 
 const router = express.Router();
 
 router.use(requireAuth);
 
 router.get(
-  "/",
+  '/',
   asyncHandler(async (req, res) => {
     const leagues = await listLeaguesForUser(req.userId);
     res.json({ leagues });
-  }),
+  })
 );
 
 router.get(
-  "/:leagueId",
+  '/:leagueId',
   asyncHandler(async (req, res) => {
     const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
+    validateObjectId(leagueId, 'league ID');
     const league = await getLeagueForUser(leagueId, req.userId);
     res.json({ league });
-  }),
+  })
 );
 
 router.post(
-  "/",
+  '/',
   asyncHandler(async (req, res) => {
     const name = validateLeagueName(req.body?.name);
     const league = await createLeagueForUser(req.userId, name);
     res.status(201).json({ league });
-  }),
+  })
 );
 
-router.post(
-  "/:leagueId",
-  asyncHandler(async (req, res) => {  
-    const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
-    const league = await getLeagueForUser(leagueId, req.userId);
-    const newLeague = req.body;
-    Object.assign(league.config, newLeague);
-    await league.save();
-    await getOrCreateDraftStateForLeague(leagueId, req.userId);
-    res.send()
-  }))
-
-
 router.delete(
-  "/:leagueId",
+  '/:leagueId',
   asyncHandler(async (req, res) => {
     const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
+    validateObjectId(leagueId, 'league ID');
     await deleteLeagueForUser(leagueId, req.userId);
     res.status(204).send();
-  }),
+  })
 );
 
 router.put(
-  "/:leagueId",
+  '/:leagueId',
   asyncHandler(async (req, res) => {
     const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
+    validateObjectId(leagueId, 'league ID');
     const payload = validateLeagueConfigPayload(req.body || {});
     const league = await updateLeagueConfigForUser(leagueId, req.userId, payload);
     res.json({ league });
-  }),
+  })
 );
 
 router.get(
-  "/:leagueId/draft-state",
+  '/:leagueId/draft-state',
   asyncHandler(async (req, res) => {
     const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
+    validateObjectId(leagueId, 'league ID');
     const draftState = await getOrCreateDraftStateForLeague(leagueId, req.userId);
     res.json({ draftState });
-  }),
+  })
 );
 
 router.put(
-  "/:leagueId/draft-state",
+  '/:leagueId/draft-state',
   asyncHandler(async (req, res) => {
     const { leagueId } = req.params;
-    validateObjectId(leagueId, "league ID");
+    validateObjectId(leagueId, 'league ID');
     const payload = validateDraftStatePayload(req.body || {});
-    console.log(payload.teams[0].players);
     const draftState = await updateDraftStateForLeague(leagueId, req.userId, payload);
     res.json({ draftState });
-  }),
+  })
 );
-
 
 module.exports = router;

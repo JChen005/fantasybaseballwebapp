@@ -38,10 +38,10 @@ function draftStateTeamsToBoard(teams = []) {
   const nextBoard = {};
 
   for (const team of teams) {
-    const teamName = team.teamName || team.teamKey;
+    const boardKey = team.teamKey;
     const slotCounts = {};
 
-    nextBoard[teamName] = (team.players || []).map((player) => {
+    nextBoard[boardKey] = (team.players || []).map((player) => {
       const slot = String(player.assignedSlot || (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') || 'BN').trim().toUpperCase();
       const slotIndex = slotCounts[slot] || 0;
       slotCounts[slot] = slotIndex + 1;
@@ -64,8 +64,7 @@ function draftStateTeamsToBoard(teams = []) {
 
 function boardToDraftStateTeams(board, existingTeams = []) {
   return existingTeams.map((team) => {
-    const teamName = team.teamName || team.teamKey;
-    const rows = board[teamName] || [];
+    const rows = board[team.teamKey] || [];
 
     const players = rows
       .filter((row) => row?.playerId)
@@ -115,11 +114,14 @@ function getDraftStatePlayerIds(teams = []) {
 
 function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSaved }) {
   const teams = draftState?.teams || [];
-  const teamNames = teams.map((team) => team.teamName || team.teamKey);
+  const teamOptions = teams.map((team) => ({
+    key: team.teamKey,
+    label: team.teamName || team.teamKey,
+  }));
   const rowPlan = useMemo(() => buildRowPlan(config?.rosterSlots || {}), [config]);
   const [board, setBoard] = useState(() => draftStateTeamsToBoard(teams));
   const [playerPool, setPlayerPool] = useState({});
-  const [selectedTeam, setSelectedTeam] = useState(teamNames[0] || '');
+  const [selectedTeamKey, setSelectedTeamKey] = useState(teamOptions[0]?.key || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -128,10 +130,10 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
   }, [teams]);
 
   useEffect(() => {
-    if (!selectedTeam || !teamNames.includes(selectedTeam)) {
-      setSelectedTeam(teamNames[0] || '');
+    if (!selectedTeamKey || !teamOptions.some((team) => team.key === selectedTeamKey)) {
+      setSelectedTeamKey(teamOptions[0]?.key || '');
     }
-  }, [selectedTeam, teamNames]);
+  }, [selectedTeamKey, teamOptions]);
 
   const draftStatePlayerIds = useMemo(() => getDraftStatePlayerIds(teams), [teams]);
 
@@ -156,9 +158,9 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
       });
   }, [draftStatePlayerIds, playerPool]);
 
-  function updateEntry(teamName, slot, slotIndex, updates) {
+  function updateEntry(teamKey, slot, slotIndex, updates) {
     setBoard((current) => {
-      const teamRows = current[teamName] || [];
+      const teamRows = current[teamKey] || [];
       const existingIndex = teamRows.findIndex((row) => row.slot === slot && row.slotIndex === slotIndex);
       const existingEntry = existingIndex >= 0
         ? teamRows[existingIndex]
@@ -179,7 +181,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
       if (isEntryEmpty(nextEntry)) {
         return {
           ...current,
-          [teamName]: teamRows.filter((row) => !(row.slot === slot && row.slotIndex === slotIndex)),
+          [teamKey]: teamRows.filter((row) => !(row.slot === slot && row.slotIndex === slotIndex)),
         };
       }
 
@@ -191,12 +193,12 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
 
       return {
         ...current,
-        [teamName]: nextTeamRows,
+        [teamKey]: nextTeamRows,
       };
     });
   }
 
-  function handlePlayerClick(teamName, slot, slotIndex) {
+  function handlePlayerClick(teamKey, slot, slotIndex) {
     if (!selectedPlayer?.mlbPlayerId) return;
 
     setPlayerPool((current) => ({
@@ -204,7 +206,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
       [Number(selectedPlayer.mlbPlayerId)]: selectedPlayer,
     }));
 
-    updateEntry(teamName, slot, slotIndex, {
+    updateEntry(teamKey, slot, slotIndex, {
       playerId: Number(selectedPlayer.mlbPlayerId),
       playerName: selectedPlayer.name || selectedPlayer.canonicalName || '',
       status: 'KEEPER',
@@ -217,8 +219,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
   const budgets = useMemo(() => {
     const result = {};
     for (const team of teams) {
-      const teamName = team.teamName || team.teamKey;
-      const rows = board[teamName] || [];
+      const rows = board[team.teamKey] || [];
       const budget = Number(team.budget || 260);
 
       const spent = rows.reduce((sum, row) => {
@@ -226,7 +227,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
         return row.countsAgainstBudget && row.cost !== '' && Number.isFinite(cost) ? sum + cost : sum;
       }, 0);
 
-      result[teamName] = {
+      result[team.teamKey] = {
         budget,
         spent,
         remaining: budget - spent,
@@ -256,8 +257,9 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
     }
   }
 
-  const currentRows = board[selectedTeam] || [];
-  const selectedBudget = budgets[selectedTeam];
+  const selectedTeam = teams.find((team) => team.teamKey === selectedTeamKey) || teams[0] || null;
+  const currentRows = board[selectedTeamKey] || [];
+  const selectedBudget = budgets[selectedTeamKey];
 
   return (
     <div className="space-y-3">
@@ -265,12 +267,12 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
         <label className="text-sm font-medium text-white">Team</label>
         <select
           className="select select-bordered select-sm !bg-white !text-black"
-          value={selectedTeam}
-          onChange={(event) => setSelectedTeam(event.target.value)}
+          value={selectedTeamKey}
+          onChange={(event) => setSelectedTeamKey(event.target.value)}
         >
-          {teamNames.map((teamName) => (
-            <option key={teamName} value={teamName}>
-              {teamName}
+          {teamOptions.map((team) => (
+            <option key={team.key} value={team.key}>
+              {team.label}
             </option>
           ))}
         </select>
@@ -302,7 +304,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
                 colSpan={4}
                 className="border border-slate-500 bg-slate-200 px-2 py-1 text-center text-black"
               >
-                <div className="font-semibold">{selectedTeam}</div>
+                <div className="font-semibold">{selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}</div>
                 <div className="text-xs font-normal">
                   Spent: ${selectedBudget?.spent ?? 0} | Remaining: ${selectedBudget?.remaining ?? 0}
                 </div>
@@ -330,12 +332,12 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
               const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
 
               return (
-                <tr key={`${selectedTeam}-${slot}-${slotIndex}-${rowIndex}`}>
+                <tr key={`${selectedTeamKey}-${slot}-${slotIndex}-${rowIndex}`}>
                   <td className="w-12 border border-slate-300 bg-white px-2 py-1 text-black">{SLOT_DISPLAY_LABELS[slot] || slot}</td>
                   <td className="min-w-64 border border-slate-300 bg-white px-2 py-1">
                     <button
                       type="button"
-                      onClick={() => handlePlayerClick(selectedTeam, slot, slotIndex)}
+                      onClick={() => handlePlayerClick(selectedTeamKey, slot, slotIndex)}
                       className="flex w-full items-center justify-between gap-2 text-left"
                     >
                       {entry.playerId ? (
@@ -358,7 +360,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
                         <span
                           onClick={(event) => {
                             event.stopPropagation();
-                            updateEntry(selectedTeam, slot, slotIndex, {
+                            updateEntry(selectedTeamKey, slot, slotIndex, {
                               playerId: null,
                               playerName: '',
                               contract: '',
@@ -377,7 +379,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
                     <select
                       className="select select-bordered select-xs !bg-white !text-black w-full"
                       value={entry.contract ?? ''}
-                      onChange={(event) => updateEntry(selectedTeam, slot, slotIndex, { contract: event.target.value })}
+                      onChange={(event) => updateEntry(selectedTeamKey, slot, slotIndex, { contract: event.target.value })}
                     >
                       <option value=""></option>
                       {CONTRACT_OPTIONS.map((option) => (
@@ -392,7 +394,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
                       className="input input-bordered input-xs !bg-white !text-black w-full text-right"
                       value={entry.cost ?? ''}
                       onChange={(event) =>
-                        updateEntry(selectedTeam, slot, slotIndex, {
+                        updateEntry(selectedTeamKey, slot, slotIndex, {
                           cost: event.target.value === '' ? '' : Number(event.target.value),
                         })
                       }
@@ -432,24 +434,6 @@ export default function Page() {
       });
   }, [leagueId]);
 
-  if (!draftState || !league) {
-    return (
-      <>
-        <KeeperPlayerRail
-          selectedPlayer={selectedPlayer}
-          setSelectedPlayer={setSelectedPlayer}
-          leagueType={league?.config?.leagueType || null}
-        />
-        <div>
-          <div className="panel mb-5">
-            <h1 className="text-lg font-bold">Keeper</h1>
-          </div>
-          <div className="text-sm text-gray-600">Loading...</div>
-        </div>
-      </>
-    );
-  }
-
   return (
     <>
       <KeeperPlayerRail
@@ -461,16 +445,24 @@ export default function Page() {
         <div className="panel mb-5">
           <h1 className="text-lg font-bold">Keeper</h1>
         </div>
-        {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-        <div>
-          <KeeperBoardTable
-            leagueId={leagueId}
-            draftState={draftState}
-            config={league.config}
-            selectedPlayer={selectedPlayer}
-            onSaved={setDraftState}
-          />
-        </div>
+        {error && (!draftState || !league) ? (
+          <p className="mb-4 text-sm text-red-600">{error}</p>
+        ) : !draftState || !league ? (
+          <div className="text-sm text-gray-600">Loading...</div>
+        ) : (
+          <>
+            {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
+            <div>
+              <KeeperBoardTable
+                leagueId={leagueId}
+                draftState={draftState}
+                config={league.config}
+                selectedPlayer={selectedPlayer}
+                onSaved={setDraftState}
+              />
+            </div>
+          </>
+        )}
       </div>
     </>
   );

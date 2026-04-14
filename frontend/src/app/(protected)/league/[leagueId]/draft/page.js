@@ -133,52 +133,48 @@ function formatPlayerPositions(positions) {
   return displayPositions.length ? displayPositions.join(', ') : 'N/A';
 }
 
-function toValuationRow(player) {
+function buildPlayerRow(player) {
   const neededSlots = Array.isArray(player.neededSlots) ? player.neededSlots : [];
+  const position = Array.isArray(player.displayPositions) && player.displayPositions.length
+    ? player.displayPositions.join(', ')
+    : formatPlayerPositions(player.positions);
 
   return {
     id: String(player.mlbPlayerId || player._id),
     name: player.name || 'Unknown player',
     team: player.team || 'FA',
-    position: Array.isArray(player.displayPositions) && player.displayPositions.length
-      ? player.displayPositions.join(', ')
-      : formatPlayerPositions(player.positions),
-    marketValue: player.marketValue || 0,
-    adjustedValue: player.adjustedValue || 0,
+    position,
     fillsNeed: Boolean(player.fillsNeed),
     neededSlots,
     mlbPlayerId: player.mlbPlayerId,
     headshotUrl: player.headshotUrl,
+  };
+}
+
+function toValuationRow(player) {
+  return {
+    ...buildPlayerRow(player),
+    marketValue: player.marketValue || 0,
+    adjustedValue: player.adjustedValue || 0,
   };
 }
 
 function toSearchRow(player) {
-  const neededSlots = Array.isArray(player.neededSlots) ? player.neededSlots : [];
-
   return {
-    id: String(player.mlbPlayerId || player._id),
-    name: player.name || 'Unknown player',
-    team: player.team || 'FA',
-    position: Array.isArray(player.displayPositions) && player.displayPositions.length
-      ? player.displayPositions.join(', ')
-      : formatPlayerPositions(player.positions),
+    ...buildPlayerRow(player),
     avgLastYear: formatAverage(player.statsLastYear?.avg),
     avg3yr: formatAverage(player.stats3Year?.avg),
-    fillsNeed: Boolean(player.fillsNeed),
-    neededSlots,
-    mlbPlayerId: player.mlbPlayerId,
-    headshotUrl: player.headshotUrl,
   };
 }
 
-function toDraftSearchRow(player, valuationRows = []) {
+function toDraftSearchRow(player, valuationRowsById) {
   const fallbackRow = toSearchRow(player);
-  const matchingValuationRow = valuationRows.find((row) => String(row.id) === String(fallbackRow.id));
+  const matchingValuationRow = valuationRowsById.get(String(fallbackRow.id));
 
   return {
     ...fallbackRow,
-    adjustedValue: matchingValuationRow?.adjustedValue ?? 1,
-    marketValue: matchingValuationRow?.marketValue ?? 1,
+    adjustedValue: matchingValuationRow?.adjustedValue ?? null,
+    marketValue: matchingValuationRow?.marketValue ?? null,
     fillsNeed: matchingValuationRow?.fillsNeed ?? Boolean(player.fillsNeed),
     neededSlots: matchingValuationRow?.neededSlots ?? fallbackRow.neededSlots,
   };
@@ -298,7 +294,6 @@ export default function Page() {
   const [rows, setRows] = useState([]);
   const [league, setLeague] = useState(null);
   const [draftState, setDraftState] = useState(null);
-  const [valuation, setValuation] = useState(null);
   const [selectedTeamId, setSelectedTeamId] = useState(113);
   const [depthChart, setDepthChart] = useState(null);
   const [draftError, setDraftError] = useState('');
@@ -366,7 +361,6 @@ export default function Page() {
         },
       });
 
-      setValuation(valuationData.valuation);
       setRows((valuationData.players || []).map(toValuationRow));
     } catch (err) {
       setDraftError(err.message || 'Failed to load draft board');
@@ -458,6 +452,53 @@ export default function Page() {
     };
   }, [activeView, isSearchingPlayers, normalizedPlayerSearchQuery, league?.config?.leagueType]);
 
+  const teams = Array.isArray(draftState?.teams) ? draftState.teams : [];
+  const picks = Array.isArray(draftState?.picks) ? draftState.picks : [];
+  const draftedPlayerIds = useMemo(
+    () =>
+      new Set(
+        teams.flatMap((team) =>
+          (Array.isArray(team.players) ? team.players : []).map((player) => String(player.playerId || '').trim()).filter(Boolean)
+        )
+      ),
+    [teams]
+  );
+
+  const rosterRows = useMemo(
+    () =>
+      teams.map((team) => ({
+        teamKey: team.teamKey,
+        teamName: team.teamName,
+        spentBudget: Number(team.spentBudget || 0),
+        budget: Number(team.budget || league?.config?.budget || 0),
+        playerCount: Array.isArray(team.players) ? team.players.length : 0,
+        players: Array.isArray(team.players) ? team.players : [],
+      })),
+    [league?.config?.budget, teams]
+  );
+  const teamNameByKey = useMemo(
+    () =>
+      new Map(
+        teams.map((team) => [team.teamKey, team.teamName || team.teamKey])
+      ),
+    [teams]
+  );
+
+  const recentPicks = useMemo(() => [...picks].sort((a, b) => b.pickNumber - a.pickNumber).slice(0, 12), [picks]);
+
+  const rosterSlots = league?.config?.rosterSlots || {};
+  const myTeamKey = draftState?.userTeamKey || teams[0]?.teamKey || '';
+  const draftTargetTeam = teams.find((team) => team.teamKey === draftTargetTeamKey) || teams.find((team) => team.teamKey === myTeamKey) || teams[0] || null;
+  const draftTeamOptions = useMemo(() => {
+    const options = new Set(rows.map((row) => row.team).filter(Boolean));
+    return ['ALL', ...Array.from(options).sort()];
+  }, [rows]);
+  const draftRoleOptions = useMemo(() => {
+    const options = new Set(rows.flatMap((row) => parsePositionList(row.position)));
+    return ['ALL', ...Array.from(options).sort()];
+  }, [rows]);
+  const valuationRowsById = useMemo(() => new Map(rows.map((row) => [String(row.id), row])), [rows]);
+
   useEffect(() => {
     if (activeView !== 'draft') return undefined;
 
@@ -487,7 +528,7 @@ export default function Page() {
         if (cancelled) return;
 
         const searchedRows = Array.isArray(data.players)
-          ? data.players.map((player) => toDraftSearchRow(player, rows))
+          ? data.players.map((player) => toDraftSearchRow(player, valuationRowsById))
           : [];
         setDraftSearchRows(searchedRows);
       } catch (err) {
@@ -506,46 +547,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, [activeView, league?.config?.leagueType, lookupQuery, rows]);
-
-  const teams = Array.isArray(draftState?.teams) ? draftState.teams : [];
-  const picks = Array.isArray(draftState?.picks) ? draftState.picks : [];
-  const draftedPlayerIds = useMemo(
-    () =>
-      new Set(
-        teams.flatMap((team) =>
-          (Array.isArray(team.players) ? team.players : []).map((player) => String(player.playerId || '').trim()).filter(Boolean)
-        )
-      ),
-    [teams]
-  );
-
-  const rosterRows = useMemo(
-    () =>
-      teams.map((team) => ({
-        teamKey: team.teamKey,
-        teamName: team.teamName,
-        spentBudget: Number(team.spentBudget || 0),
-        budget: Number(team.budget || league?.config?.budget || 0),
-        playerCount: Array.isArray(team.players) ? team.players.length : 0,
-        players: Array.isArray(team.players) ? team.players : [],
-      })),
-    [league?.config?.budget, teams]
-  );
-
-  const recentPicks = useMemo(() => [...picks].sort((a, b) => b.pickNumber - a.pickNumber).slice(0, 12), [picks]);
-
-  const rosterSlots = league?.config?.rosterSlots || {};
-  const myTeamKey = draftState?.userTeamKey || teams[0]?.teamKey || '';
-  const draftTargetTeam = teams.find((team) => team.teamKey === draftTargetTeamKey) || teams.find((team) => team.teamKey === myTeamKey) || teams[0] || null;
-  const draftTeamOptions = useMemo(() => {
-    const options = new Set(rows.map((row) => row.team).filter(Boolean));
-    return ['ALL', ...Array.from(options).sort()];
-  }, [rows]);
-  const draftRoleOptions = useMemo(() => {
-    const options = new Set(rows.flatMap((row) => parsePositionList(row.position)));
-    return ['ALL', ...Array.from(options).sort()];
-  }, [rows]);
+  }, [activeView, draftTargetTeamKey, league?.config?.leagueType, lookupQuery, valuationRowsById]);
   const filteredDraftRows = useMemo(() => {
     const sourceRows = lookupQuery.trim() ? draftSearchRows : rows;
     return sourceRows.filter((row) => {
@@ -1022,7 +1024,7 @@ export default function Page() {
                       Pick {pick.pickNumber} · {pick.playerName || pick.playerId}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {pick.teamKey} · {pick.status || 'DRAFTED'}
+                      {teamNameByKey.get(pick.teamKey) || pick.teamKey} · {pick.status || 'DRAFTED'}
                     </p>
                   </div>
                   <p className="text-sm font-semibold text-emerald-100">${pick.cost || 0}</p>
