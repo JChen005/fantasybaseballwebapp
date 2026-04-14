@@ -189,15 +189,29 @@ function sortDepthSlots(slots) {
   });
 }
 
-function buildExcludedPlayersFromTeams(teams, userTeamKey) {
+function resolveValuationTeamKey(teams, selectedTeamKey, defaultTeamKey) {
   const safeTeams = Array.isArray(teams) ? teams : [];
-  const myTeamState = safeTeams.find((team) => team.teamKey === userTeamKey) || safeTeams[0];
-  const otherTeamStates = safeTeams.filter((team) => team.teamKey !== myTeamState?.teamKey);
+
+  if (selectedTeamKey && safeTeams.some((team) => team.teamKey === selectedTeamKey)) {
+    return selectedTeamKey;
+  }
+
+  if (defaultTeamKey && safeTeams.some((team) => team.teamKey === defaultTeamKey)) {
+    return defaultTeamKey;
+  }
+
+  return safeTeams[0]?.teamKey || '';
+}
+
+function buildExcludedPlayersFromTeams(teams, valuationTeamKey) {
+  const safeTeams = Array.isArray(teams) ? teams : [];
+  const valuationTeamState = safeTeams.find((team) => team.teamKey === valuationTeamKey) || safeTeams[0];
+  const otherTeamStates = safeTeams.filter((team) => team.teamKey !== valuationTeamState?.teamKey);
 
   return {
-    myTeamState,
+    valuationTeamState,
     excludedPlayers: [
-      ...((myTeamState?.players || []).map((player) => ({
+      ...((valuationTeamState?.players || []).map((player) => ({
         playerId: player.playerId,
         status: player.status,
         cost: player.cost,
@@ -341,23 +355,23 @@ export default function Page() {
       setLeague(leagueData);
       setDraftState(draftStateData);
 
-      const myTeamKey = draftStateData.userTeamKey || draftStateData.teams?.[0]?.teamKey || '';
-      const { myTeamState, excludedPlayers } = buildExcludedPlayersFromTeams(draftStateData.teams, myTeamKey);
+      const valuationTeamKey = resolveValuationTeamKey(draftStateData.teams, draftTargetTeamKey, draftStateData.userTeamKey);
+      const { valuationTeamState, excludedPlayers } = buildExcludedPlayersFromTeams(draftStateData.teams, valuationTeamKey);
 
-        const valuationData = await playerApi.getPlayerValuations({
-          league: {
-            leagueType: leagueData.config?.leagueType,
-            budget: leagueData.config?.budget,
-            teamCount: leagueData.config?.teamNames?.length || 1,
-            rosterSlots: leagueData.config?.rosterSlots,
-          },
-          filters: {
-            limit: DRAFT_VALUATION_LIMIT,
-            includeInactive: false,
-          },
-          draftState: {
-            excludedPlayers,
-          filledSlots: myTeamState?.filledSlots || {},
+      const valuationData = await playerApi.getPlayerValuations({
+        league: {
+          leagueType: leagueData.config?.leagueType,
+          budget: leagueData.config?.budget,
+          teamCount: leagueData.config?.teamNames?.length || 1,
+          rosterSlots: leagueData.config?.rosterSlots,
+        },
+        filters: {
+          limit: DRAFT_VALUATION_LIMIT,
+          includeInactive: false,
+        },
+        draftState: {
+          excludedPlayers,
+          filledSlots: valuationTeamState?.filledSlots || {},
         },
       });
 
@@ -369,7 +383,7 @@ export default function Page() {
         setIsLoadingDraft(false);
       }
     }
-  }, [leagueId]);
+  }, [draftTargetTeamKey, leagueId]);
 
   useEffect(() => {
     async function loadDraftBoard() {
@@ -488,7 +502,8 @@ export default function Page() {
 
   const rosterSlots = league?.config?.rosterSlots || {};
   const myTeamKey = draftState?.userTeamKey || teams[0]?.teamKey || '';
-  const draftTargetTeam = teams.find((team) => team.teamKey === draftTargetTeamKey) || teams.find((team) => team.teamKey === myTeamKey) || teams[0] || null;
+  const valuationTeamKey = resolveValuationTeamKey(teams, draftTargetTeamKey, myTeamKey);
+  const draftTargetTeam = teams.find((team) => team.teamKey === valuationTeamKey) || null;
   const draftTeamOptions = useMemo(() => {
     const options = new Set(rows.map((row) => row.team).filter(Boolean));
     return ['ALL', ...Array.from(options).sort()];
