@@ -185,44 +185,62 @@ function validateDraftStatePayload(payload = {}) {
         }
       }
 
-      const players = Array.isArray(team.players) ? team.players.map((player, playerIndex) => {
-        if (!player || typeof player !== 'object' || Array.isArray(player)) {
-          throw new AppError(`teams[${teamIndex}].players[${playerIndex}] must be an object`, 400);
-        }
+      const players = Array.isArray(team.players)
+        ? team.players.map((player, playerIndex) => {
+            if (!player || typeof player !== 'object' || Array.isArray(player)) {
+              throw new AppError(`teams[${teamIndex}].players[${playerIndex}] must be an object`, 400);
+            }
 
-        const playerId = String(player.playerId || '').trim();
-        const status = String(player.status || '').trim().toUpperCase();
-        if (!playerId) {
-          throw new AppError(`teams[${teamIndex}].players[${playerIndex}].playerId is required`, 400);
-        }
-        if (!['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'].includes(status)) {
-          throw new AppError(`teams[${teamIndex}].players[${playerIndex}].status is invalid`, 400);
-        }
+            const playerId = String(player.playerId || '').trim();
+            const status = String(player.status || '').trim().toUpperCase();
+            if (!playerId) {
+              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].playerId is required`, 400);
+            }
+            if (!['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'].includes(status)) {
+              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].status is invalid`, 400);
+            }
 
-        const cost = Number(player.cost ?? 0);
-        if (!Number.isFinite(cost) || cost < 0) {
-          throw new AppError(`teams[${teamIndex}].players[${playerIndex}].cost must be non-negative`, 400);
-        }
+            const cost = Number(player.cost ?? 0);
+            if (!Number.isFinite(cost) || cost < 0) {
+              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].cost must be non-negative`, 400);
+            }
 
-        const assignedSlot = String(
-          player.assignedSlot
-            || (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '')
-            || ''
-        ).trim().toUpperCase();
+            const assignedSlot = String(
+              player.assignedSlot ||
+                (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') ||
+                ''
+            )
+              .trim()
+              .toUpperCase();
 
-        return {
-          playerId: Number(playerId),
-          playerName: String(player.playerName || '').trim(),
-          cost,
-          status,
-          countsAgainstBudget: assignedSlot !== 'BN' && status !== 'RESERVE' && status !== 'TAXI',
-          assignedSlot,
-          assignedSlots: Array.isArray(player.assignedSlots)
-            ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
-            : (assignedSlot ? [assignedSlot] : []),
-          contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
-        };
-      }) : [];
+            let taxiSlot;
+            if (player.taxiSlot != null && player.taxiSlot !== '') {
+              taxiSlot = Number(player.taxiSlot);
+              if (!Number.isInteger(taxiSlot) || taxiSlot < 0) {
+                throw new AppError(
+                  `teams[${teamIndex}].players[${playerIndex}].taxiSlot must be a non-negative integer`,
+                  400
+                );
+              }
+            }
+
+            return {
+              playerId: Number(playerId),
+              playerName: String(player.playerName || '').trim(),
+              cost,
+              status,
+              countsAgainstBudget: assignedSlot !== 'BN' && status !== 'RESERVE' && status !== 'TAXI',
+              assignedSlot,
+              assignedSlots: Array.isArray(player.assignedSlots)
+                ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
+                : assignedSlot
+                  ? [assignedSlot]
+                  : [],
+              contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
+              taxiSlot: status === 'TAXI' ? taxiSlot : undefined,
+            };
+          })
+        : [];
 
       return {
         teamKey,

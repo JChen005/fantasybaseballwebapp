@@ -86,6 +86,7 @@ router.put(
     const { leagueId } = req.params;
     validateObjectId(leagueId, 'league ID');
     const payload = validateDraftStatePayload(req.body || {});
+    console.log(req.body.teams[0].players);
     const draftState = await updateDraftStateForLeague(leagueId, req.userId, payload);
     res.json({ draftState });
   })

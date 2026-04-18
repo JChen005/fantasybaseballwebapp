@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import KeeperPlayerRail from 'components/KeeperPlayerRail';
 import { draftkitApi } from 'lib/draftkitApi';
 import { leagueApi } from 'lib/leagueApi';
@@ -9,11 +10,80 @@ import { playerApi } from 'lib/playerApi';
 
 const SLOT_ORDER = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL', 'P', 'BN'];
 const CONTRACT_OPTIONS = ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'];
-const SLOT_DISPLAY_LABELS = {
-  '1B': 'B1',
-  '2B': 'B2',
-  '3B': 'B3',
-};
+
+export default function Page() {
+  const params = useParams();
+  const pathname = usePathname();
+  const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
+  const leagueId = Array.isArray(params?.leagueId) ? params.leagueId[0] : params?.leagueId;
+  const [draftState, setDraftState] = useState(null);
+  const [league, setLeague] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!leagueId) return;
+
+    Promise.all([leagueApi.getDraftState(leagueId), draftkitApi.getLeague(leagueId)])
+      .then(([draftStateResponse, leagueResponse]) => {
+        setDraftState(draftStateResponse.draftState);
+        setLeague(leagueResponse.league);
+      })
+      .catch((loadError) => {
+        setError(loadError.message || 'Failed to load keeper data');
+      });
+  }, [leagueId]);
+
+  return (
+    <>
+      <KeeperPlayerRail
+        selectedPlayer={selectedPlayer}
+        setSelectedPlayer={setSelectedPlayer}
+        leagueType={league?.config?.leagueType || null}
+      />
+      <section className="space-y-4">
+        <div className="panel">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                League / Keepers
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-white">Keeper Board</h1>
+            </div>
+
+            <Link
+              href={`${basePath}/draft`}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5"
+            >
+              Go to Draft
+            </Link>
+          </div>
+        </div>
+
+        {error && (!draftState || !league) ? (
+          <p className="text-sm text-red-600">{error}</p>
+        ) : !draftState || !league ? (
+          <div className="panel">
+            <div className="text-sm text-slate-600">Loading keeper data...</div>
+          </div>
+        ) : (
+          <>
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <KeeperBoardTable
+              leagueId={leagueId}
+              draftState={draftState}
+              config={league.config}
+              selectedPlayer={selectedPlayer}
+              onSaved={setDraftState}
+            />
+          </>
+        )}
+      </section>
+    </>
+  );
+}
+
+//Sub components
 
 function buildRowPlan(rosterSlots = {}) {
   const rows = [];
@@ -42,7 +112,11 @@ function draftStateTeamsToBoard(teams = []) {
     const slotCounts = {};
 
     nextBoard[boardKey] = (team.players || []).map((player) => {
-      const slot = String(player.assignedSlot || (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') || 'BN').trim().toUpperCase();
+      const slot = String(
+        player.assignedSlot || (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') || 'BN'
+      )
+        .trim()
+        .toUpperCase();
       const slotIndex = slotCounts[slot] || 0;
       slotCounts[slot] = slotIndex + 1;
 
@@ -54,7 +128,8 @@ function draftStateTeamsToBoard(teams = []) {
         cost: player.cost ?? '',
         status: player.status || 'KEEPER',
         contract: player.contract || '',
-        countsAgainstBudget: typeof player.countsAgainstBudget === 'boolean' ? player.countsAgainstBudget : true,
+        countsAgainstBudget:
+          typeof player.countsAgainstBudget === 'boolean' ? player.countsAgainstBudget : true,
       };
     });
   }
@@ -162,18 +237,19 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
     setBoard((current) => {
       const teamRows = current[teamKey] || [];
       const existingIndex = teamRows.findIndex((row) => row.slot === slot && row.slotIndex === slotIndex);
-      const existingEntry = existingIndex >= 0
-        ? teamRows[existingIndex]
-        : {
-            slot,
-            slotIndex,
-            playerId: null,
-            playerName: '',
-            cost: '',
-            status: 'KEEPER',
-            contract: '',
-            countsAgainstBudget: true,
-          };
+      const existingEntry =
+        existingIndex >= 0
+          ? teamRows[existingIndex]
+          : {
+              slot,
+              slotIndex,
+              playerId: null,
+              playerName: '',
+              cost: '',
+              status: 'KEEPER',
+              contract: '',
+              countsAgainstBudget: true,
+            };
 
       const nextEntry = { ...existingEntry, ...updates };
       const nextTeamRows = [...teamRows];
@@ -241,6 +317,7 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
       setSaving(true);
       setError('');
       const updatedTeams = boardToDraftStateTeams(board, teams);
+      console.log(updatedTeams);
       const response = await leagueApi.updateDraftState(leagueId, {
         ...draftState,
         teams: updatedTeams,
@@ -262,208 +339,204 @@ function KeeperBoardTable({ leagueId, draftState, config, selectedPlayer, onSave
   const selectedBudget = budgets[selectedTeamKey];
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium text-white">Team</label>
-        <select
-          className="select select-bordered select-sm !bg-white !text-black"
-          value={selectedTeamKey}
-          onChange={(event) => setSelectedTeamKey(event.target.value)}
-        >
-          {teamOptions.map((team) => (
-            <option key={team.key} value={team.key}>
-              {team.label}
-            </option>
-          ))}
-        </select>
+    <div className="space-y-4">
+      <div className="panel">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Keeper Board
+              </p>
+              <h2 className="mt-2 text-lg font-semibold text-white">
+                {selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}
+              </h2>
+              <p className="text-sm text-slate-600">
+                Assign keepers and update contract values.
+              </p>
+            </div>
 
-        <div className="text-sm text-black">
-          Budget{' '}
-          <span className={selectedBudget?.remaining < 0 ? 'text-red-600' : ''}>
-            ${selectedBudget?.remaining ?? 0}
-          </span>
-        </div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-slate-700/60 bg-slate-900/45 px-4 py-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Budget Remaining</p>
+                <p
+                  className={`mt-1 text-lg font-semibold ${
+                    selectedBudget?.remaining < 0 ? 'text-red-400' : 'text-emerald-100'
+                  }`}
+                >
+                  ${selectedBudget?.remaining ?? 0}
+                </p>
+              </div>
 
-        <button
-          type="button"
-          className="btn btn-sm"
-          disabled={saving}
-          onClick={handleSaveBoard}
-        >
-          {saving ? 'Saving...' : 'Save Board'}
-        </button>
-      </div>
-
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th
-                colSpan={4}
-                className="border border-slate-500 bg-slate-200 px-2 py-1 text-center text-black"
+              <button
+                type="button"
+                className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={saving}
+                onClick={handleSaveBoard}
               >
-                <div className="font-semibold">{selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}</div>
-                <div className="text-xs font-normal">
-                  Spent: ${selectedBudget?.spent ?? 0} | Remaining: ${selectedBudget?.remaining ?? 0}
-                </div>
-              </th>
-            </tr>
-            <tr>
-              <th className="w-12 border border-slate-400 bg-slate-100 px-2 py-1 text-black">Pos</th>
-              <th className="min-w-64 border border-slate-400 bg-slate-100 px-2 py-1 text-black">Player</th>
-              <th className="w-20 border border-slate-400 bg-slate-100 px-2 py-1 text-black">Contract</th>
-              <th className="w-20 border border-slate-400 bg-slate-100 px-2 py-1 text-black">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rowPlan.map(({ slot, slotIndex }, rowIndex) => {
-              const entry = findEntry(currentRows, slot, slotIndex) || {
-                slot,
-                slotIndex,
-                playerId: null,
-                playerName: '',
-                cost: '',
-                status: 'KEEPER',
-                contract: '',
-                countsAgainstBudget: true,
-              };
-              const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
+                {saving ? 'Saving...' : 'Save Board'}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {teamOptions.map((team) => {
+              const isActive = selectedTeamKey === team.key;
 
               return (
-                <tr key={`${selectedTeamKey}-${slot}-${slotIndex}-${rowIndex}`}>
-                  <td className="w-12 border border-slate-300 bg-white px-2 py-1 text-black">{SLOT_DISPLAY_LABELS[slot] || slot}</td>
-                  <td className="min-w-64 border border-slate-300 bg-white px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => handlePlayerClick(selectedTeamKey, slot, slotIndex)}
-                      className="flex w-full items-center justify-between gap-2 text-left"
-                    >
-                      {entry.playerId ? (
-                        <div className="flex min-w-0 items-center gap-2">
-                          {player?.headshotUrl ? (
-                            <img
-                              src={player.headshotUrl}
-                              alt={entry.playerName}
-                              className="h-8 w-8 rounded object-cover"
-                            />
-                          ) : null}
-                          <div className="min-w-0">
-                            <div className="truncate text-sm text-black">{entry.playerName}</div>
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Click to assign selected player</span>
-                      )}
-                      {entry.playerId ? (
-                        <span
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            updateEntry(selectedTeamKey, slot, slotIndex, {
-                              playerId: null,
-                              playerName: '',
-                              contract: '',
-                              cost: '',
-                              countsAgainstBudget: true,
-                            });
-                          }}
-                          className="shrink-0 cursor-pointer text-xs text-red-600"
-                        >
-                          Clear
-                        </span>
-                      ) : null}
-                    </button>
-                  </td>
-                  <td className="w-20 border border-slate-300 bg-white px-1 py-1">
-                    <select
-                      className="select select-bordered select-xs !bg-white !text-black w-full"
-                      value={entry.contract ?? ''}
-                      onChange={(event) => updateEntry(selectedTeamKey, slot, slotIndex, { contract: event.target.value })}
-                    >
-                      <option value=""></option>
-                      {CONTRACT_OPTIONS.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="w-20 border border-slate-300 bg-white px-1 py-1">
-                    <input
-                      type="number"
-                      min="0"
-                      className="input input-bordered input-xs !bg-white !text-black w-full text-right"
-                      value={entry.cost ?? ''}
-                      onChange={(event) =>
-                        updateEntry(selectedTeamKey, slot, slotIndex, {
-                          cost: event.target.value === '' ? '' : Number(event.target.value),
-                        })
-                      }
-                    />
-                  </td>
-                </tr>
+                <button
+                  key={team.key}
+                  type="button"
+                  onClick={() => setSelectedTeamKey(team.key)}
+                  className={`rounded-[1rem] border px-3.5 py-2 text-sm font-semibold transition ${
+                    isActive
+                      ? 'border-emerald-300/70 bg-emerald-400/22 text-emerald-50 shadow-[0_10px_24px_rgba(16,185,129,0.14)]'
+                      : 'border-slate-300/20 bg-slate-300/7 text-slate-100 hover:bg-slate-200/12'
+                  }`}
+                >
+                  {team.label}
+                </button>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      </div>
+
+      <div className="panel overflow-hidden">
+        <div className="mb-4 rounded-xl border border-slate-700/60 bg-slate-900/55 px-4 py-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-white">
+                {selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}
+              </h3>
+              <p className="text-sm text-slate-500">
+                Manage keeper assignments by roster slot.
+              </p>
+            </div>
+            <div className="text-sm text-slate-300">
+              <span className="font-medium text-white">Spent:</span> ${selectedBudget?.spent ?? 0}
+              <span className="mx-2 text-slate-600">•</span>
+              <span className="font-medium text-white">Remaining:</span>{' '}
+              <span className={selectedBudget?.remaining < 0 ? 'text-red-400' : 'text-emerald-100'}>
+                ${selectedBudget?.remaining ?? 0}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-3">
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 bg-slate-950">
+              <tr className="border-b border-slate-200 text-left">
+                <th className="w-16 px-3 py-3 font-medium text-white">Pos</th>
+                <th className="min-w-64 px-3 py-3 font-medium text-white">Player</th>
+                <th className="w-28 px-3 py-3 font-medium text-white">Contract</th>
+                <th className="w-24 px-3 py-3 font-medium text-white">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowPlan.map(({ slot, slotIndex }, rowIndex) => {
+                const entry = findEntry(currentRows, slot, slotIndex) || {
+                  slot,
+                  slotIndex,
+                  playerId: null,
+                  playerName: '',
+                  cost: '',
+                  status: 'KEEPER',
+                  contract: '',
+                  countsAgainstBudget: true,
+                };
+                const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
+
+                return (
+                  <tr
+                    key={`${selectedTeamKey}-${slot}-${slotIndex}-${rowIndex}`}
+                    className="border-b border-slate-200/70 transition hover:bg-white/5"
+                  >
+                    <td className="w-16 px-3 py-3 align-middle text-sm font-semibold text-slate-200">
+                      {slot}
+                    </td>
+                    <td className="min-w-64 px-3 py-3">
+                      <button
+                        type="button"
+                        onClick={() => handlePlayerClick(selectedTeamKey, slot, slotIndex)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left transition hover:bg-white/5"
+                      >
+                        {entry.playerId ? (
+                          <div className="flex min-w-0 items-center gap-2">
+                            {player?.headshotUrl ? (
+                              <img
+                                src={player.headshotUrl}
+                                alt={entry.playerName}
+                                className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                              />
+                            ) : null}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-white">
+                                {entry.playerName}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-500">Click to assign selected player</span>
+                        )}
+                        {entry.playerId ? (
+                          <span
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              updateEntry(selectedTeamKey, slot, slotIndex, {
+                                playerId: null,
+                                playerName: '',
+                                contract: '',
+                                cost: '',
+                                countsAgainstBudget: true,
+                              });
+                            }}
+                            className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+                          >
+                            Clear
+                          </span>
+                        ) : null}
+                      </button>
+                    </td>
+                    <td className="w-28 px-3 py-3">
+                      <select
+                        className="input w-full"
+                        value={entry.contract ?? ''}
+                        onChange={(event) =>
+                          updateEntry(selectedTeamKey, slot, slotIndex, { contract: event.target.value })
+                        }
+                      >
+                        <option value=""></option>
+                        {CONTRACT_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="w-24 px-3 py-3">
+                      <input
+                        type="number"
+                        min="0"
+                        className="input w-full text-right"
+                        value={entry.cost ?? ''}
+                        onChange={(event) =>
+                          updateEntry(selectedTeamKey, slot, slotIndex, {
+                            cost: event.target.value === '' ? '' : Number(event.target.value),
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function Page() {
-  const params = useParams();
-  const leagueId = Array.isArray(params?.leagueId) ? params.leagueId[0] : params?.leagueId;
-  const [draftState, setDraftState] = useState(null);
-  const [league, setLeague] = useState(null);
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (!leagueId) return;
-
-    Promise.all([
-      leagueApi.getDraftState(leagueId),
-      draftkitApi.getLeague(leagueId),
-    ])
-      .then(([draftStateResponse, leagueResponse]) => {
-        setDraftState(draftStateResponse.draftState);
-        setLeague(leagueResponse.league);
-      })
-      .catch((loadError) => {
-        setError(loadError.message || 'Failed to load keeper data');
-      });
-  }, [leagueId]);
-
-  return (
-    <>
-      <KeeperPlayerRail
-        selectedPlayer={selectedPlayer}
-        setSelectedPlayer={setSelectedPlayer}
-        leagueType={league?.config?.leagueType || null}
-      />
-      <div>
-        <div className="panel mb-5">
-          <h1 className="text-lg font-bold">Keeper</h1>
-        </div>
-        {error && (!draftState || !league) ? (
-          <p className="mb-4 text-sm text-red-600">{error}</p>
-        ) : !draftState || !league ? (
-          <div className="text-sm text-gray-600">Loading...</div>
-        ) : (
-          <>
-            {error ? <p className="mb-4 text-sm text-red-600">{error}</p> : null}
-            <div>
-              <KeeperBoardTable
-                leagueId={leagueId}
-                draftState={draftState}
-                config={league.config}
-                selectedPlayer={selectedPlayer}
-                onSaved={setDraftState}
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
