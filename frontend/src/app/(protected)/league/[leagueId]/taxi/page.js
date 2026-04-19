@@ -52,12 +52,6 @@ export default function Page() {
               <h1 className="mt-2 text-2xl font-semibold text-white">Taxi Squad</h1>
             </div>
 
-            <Link
-              href={`${basePath}/draft`}
-              className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5"
-            >
-              Go to Draft
-            </Link>
           </div>
         </div>
 
