@@ -5,10 +5,11 @@ export const DRAFT_VIEW_TABS = [
   { id: 'draft', label: 'Draft Board' },
   { id: 'recent', label: 'Recent Picks' },
   { id: 'roster', label: 'Team Roster' },
+  { id: 'depth', label: 'Player Depth' },
   { id: 'budget', label: 'Budget' },
   { id: 'lookup', label: 'Player Lookup' },
   { id: 'pool', label: 'Valuation Pool' },
-  { id: 'depth', label: 'Player Depth' },
+  
 ];
 
 export const MLB_DEPTH_CHART_TEAMS = [

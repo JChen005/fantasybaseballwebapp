@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from "react";
+import React, { useMemo, useState } from 'react';
+import { leagueApi } from 'lib/leagueApi';
 
 const CONTRACT_OPTIONS = ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'];
 
 export default function DraftBoardView({
+  leagueId,
+  league,
   filteredDraftRows,
   draftTeamFilter,
   setDraftTeamFilter,
@@ -44,6 +47,38 @@ export default function DraftBoardView({
   contract,
   setContract
 }) {
+  const [expandedRows, setExpandedRows] = useState({});
+  const [playerNotes, setPlayerNotes] = useState({});
+
+  const savedNotesByPlayerId = useMemo(() => {
+    return (league?.playerNotes || []).reduce((acc, note) => {
+      acc[String(note.id)] = note.notes || '';
+      return acc;
+    }, {});
+  }, [league?.playerNotes]);
+
+  function toggleRowExpanded(rowId) {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [rowId]: !prev[rowId],
+    }));
+  }
+
+  function handleNoteChange(rowId, value) {
+    setPlayerNotes((prev) => ({
+      ...prev,
+      [String(rowId)]: value,
+    }));
+  }
+
+  async function handleNoteSave(row) {
+    const note = (playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? '').trim();
+
+    await leagueApi.createPlayerNote(leagueId, {
+      id: Number(row.id),
+      notes: note,
+    });
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
@@ -52,16 +87,16 @@ export default function DraftBoardView({
           <div className="flex flex-col gap-2">
             <h2 className="text-lg font-semibold">Draft Board</h2>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-white">Search</span>
-              <input
-                className="input"
-                value={lookupQuery}
-                onChange={(event) => setLookupQuery(event.target.value)}
-                placeholder="Player name, team, role"
-              />
-            </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="font-medium text-white">Search</span>
+            <input
+              className="input"
+              value={lookupQuery}
+              onChange={(event) => setLookupQuery(event.target.value)}
+              placeholder="Player name, team, role"
+            />
+          </label>
+          <div className="grid gap-3 md:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-white">Team</span>
               <select className="input" value={draftTeamFilter} onChange={(event) => setDraftTeamFilter(event.target.value)}>
@@ -92,6 +127,7 @@ export default function DraftBoardView({
             </label>
           </div>
         </div>
+
         {isLoadingDraft ? (
           <p className="text-sm text-slate-600">Loading draft valuations...</p>
         ) : draftError ? (
@@ -114,30 +150,64 @@ export default function DraftBoardView({
                 </tr>
               </thead>
               <tbody>
-                {filteredDraftRows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className={`cursor-pointer border-b border-slate-200/70 transition hover:bg-white/5 ${
-                      selectedDraftPlayerId === row.id ? 'bg-white/6' : ''
-                    }`}
-                    onClick={() => handleSelectDraftPlayer(row)}
-                  >
-                    <td className="px-2 py-2 font-medium">
-                      <PlayerCell row={row} />
-                    </td>
-                    <td className="px-2 py-2">{row.position}</td>
-                    <td className="px-2 py-2 font-semibold text-white">
-                      {typeof row.adjustedValue === 'number' ? `$${row.adjustedValue}` : 'N/A'}
-                    </td>
-                    <td className="px-2 py-2">
-                      {typeof row.fillsNeed === 'boolean'
-                        ? row.fillsNeed
-                          ? `Yes${row.neededSlots?.length ? ` · ${row.neededSlots.join(', ')}` : ''}`
-                          : 'No'
-                        : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
+                {filteredDraftRows.map((row) => {
+                  const isSelected = selectedDraftPlayerId === row.id;
+                  const isExpanded = !!expandedRows[row.id];
+
+                  return (
+                    <React.Fragment key={row.id}>
+                      <tr
+                        className={`cursor-pointer border-b border-slate-200/70 transition hover:bg-white/5 ${
+                          isSelected ? 'bg-white/6' : ''
+                        }`}
+                        onClick={() => handleSelectDraftPlayer(row)}
+                      >
+                        <td className="px-2 py-2 font-medium">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-slate-600 text-xs text-slate-200 transition hover:bg-white/5"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleRowExpanded(row.id);
+                              }}
+                              aria-label={isExpanded ? 'Collapse stats' : 'Expand stats'}
+                            >
+                              {isExpanded ? '▾' : '▸'}
+                            </button>
+                            <PlayerCell row={row} />
+                          </div>
+                        </td>
+                        <td className="px-2 py-2">{row.position}</td>
+                        <td className="px-2 py-2 font-semibold text-white">
+                          {typeof row.adjustedValue === 'number' ? `$${row.adjustedValue}` : 'N/A'}
+                        </td>
+                        <td className="px-2 py-2">
+                          {typeof row.fillsNeed === 'boolean'
+                            ? row.fillsNeed
+                              ? `Yes${row.neededSlots?.length ? ` · ${row.neededSlots.join(', ')}` : ''}`
+                              : 'No'
+                            : 'N/A'}
+                        </td>
+                      </tr>
+
+                      {isExpanded ? (
+                        <tr className="border-b border-slate-200/50 bg-slate-900/40">
+                          <td colSpan={4} className="px-4 py-3">
+                            <DraftStatsTable
+                              row={row}
+                              statsLastYear={row.statsLastYear}
+                              stats3Year={row.stats3Year}
+                              note={playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? ''}
+                              onNoteChange={handleNoteChange}
+                              onNoteSave={handleNoteSave}
+                            />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -234,19 +304,19 @@ export default function DraftBoardView({
             {draftActionError ? <p className="text-sm text-red-600">{draftActionError}</p> : null}
 
             <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-white">Contract</span>
-                <select
-                  className="input"
-                  value={contract}
-                  onChange={(event) => setContract(event.target.value)}
-                >
-                  {CONTRACT_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <span className="font-medium text-white">Contract</span>
+              <select
+                className="input"
+                value={contract}
+                onChange={(event) => setContract(event.target.value)}
+              >
+                {CONTRACT_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <div className="flex flex-col gap-3">
               <button
@@ -270,5 +340,88 @@ export default function DraftBoardView({
         )}
       </div>
     </div>
+  );
+}
+
+function DraftStatsTable({
+  row,
+  statsLastYear,
+  stats3Year,
+  note,
+  onNoteChange,
+  onNoteSave,
+}) {
+  const statKeys = ['avg', 'hr', 'rbi', 'sb', 'w', 'k', 'era', 'whip'];
+
+  function formatStat(value, key) {
+    if (value === null || value === undefined || value === '') return '—';
+
+    if (['avg', 'era', 'whip'].includes(key) && typeof value === 'number') {
+      return value.toFixed(3);
+    }
+
+    return value;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-700/70 bg-slate-950/40">
+      <table className="min-w-full text-xs text-left">
+        <thead>
+          <tr className="border-b border-slate-700 text-slate-300">
+            <th className="px-2 py-2 font-medium">Window</th>
+            {statKeys.map((key) => (
+              <th key={key} className="px-2 py-2 font-medium uppercase">
+                {key}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          <StatsRow
+            label="Last Year"
+            stats={statsLastYear}
+            statKeys={statKeys}
+            formatStat={formatStat}
+          />
+          <StatsRow
+            label="3 Year"
+            stats={stats3Year}
+            statKeys={statKeys}
+            formatStat={formatStat}
+          />
+
+          <tr className="border-t border-slate-700">
+            <td colSpan={statKeys.length + 1} className="p-0">
+              <textarea
+                className="h-8 w-full resize-none bg-transparent px-2 py-1 text-xs text-white outline-none placeholder:text-slate-500"
+                value={note}
+                placeholder="Add note (enter to save)"
+                onChange={(event) => onNoteChange(row.id, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    onNoteSave(row);
+                  }
+                }}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StatsRow({ label, stats, statKeys, formatStat }) {
+  return (
+    <tr className="border-b border-slate-800 last:border-b-0">
+      <td className="px-2 py-2 font-semibold text-white">{label}</td>
+      {statKeys.map((key) => (
+        <td key={key} className="px-2 py-2 text-slate-300">
+          {formatStat(stats?.[key], key)}
+        </td>
+      ))}
+    </tr>
   );
 }

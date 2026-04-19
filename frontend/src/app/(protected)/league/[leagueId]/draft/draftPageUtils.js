@@ -1,3 +1,4 @@
+import { statsBuffer } from 'framer-motion';
 import { DRAFT_VIEW_TABS } from './draftPageConstants';
 
 export function resolveDraftView(rawView) {
@@ -94,6 +95,8 @@ export function buildPlayerRow(player) {
     neededSlots,
     mlbPlayerId: player.mlbPlayerId,
     headshotUrl: player.headshotUrl,
+    statsLastYear: player.statsLastYear || null,
+    stats3Year: player.stats3Year || null,
   };
 }
 
@@ -114,7 +117,9 @@ export function toSearchRow(player) {
 }
 
 export function toDraftSearchRow(player, valuationRowsById) {
+  console.log("toDraftSearchRow player:", player);
   const fallbackRow = toSearchRow(player);
+  console.log("toDraftSearchRow fallbackRow:", fallbackRow);
   const matchingValuationRow = valuationRowsById.get(String(fallbackRow.id));
 
   return {

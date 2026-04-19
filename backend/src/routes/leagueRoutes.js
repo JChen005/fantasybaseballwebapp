@@ -92,4 +92,26 @@ router.put(
   })
 );
 
+router.post(
+  '/:leagueId/player-notes',
+  asyncHandler(async (req, res) => {
+    const { leagueId } = req.params;
+    validateObjectId(leagueId, 'league ID');
+
+    const league = await getLeagueForUser(leagueId, req.userId);
+
+    const incomingNote = req.body;
+    const incomingPlayerId = String(incomingNote.playerId);
+
+    league.playerNotes = (league.playerNotes || []).filter(
+      (note) => String(note.playerId) !== incomingPlayerId
+    );
+
+    league.playerNotes.push(incomingNote);
+
+    await league.save();
+    res.send();
+  })
+);
+
 module.exports = router;

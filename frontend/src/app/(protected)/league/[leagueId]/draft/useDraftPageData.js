@@ -229,55 +229,83 @@ export default function useDraftPageData({ activeView, leagueId }) {
 
   const valuationRowsById = useMemo(() => new Map(rows.map((row) => [String(row.id), row])), [rows]);
 
-  useEffect(() => {
-    if (activeView !== 'draft') return undefined;
+ useEffect(() => {
+  if (activeView !== 'draft') return undefined;
 
-    const normalizedLookupQuery = lookupQuery.trim();
-    if (!normalizedLookupQuery) {
+  // Parse lookup query into individual queries by splitting on commas
+  const queries = lookupQuery
+    .split(',')
+    .map((q) => q.trim())
+    .filter((q) => q.length > 0);
+
+  if (queries.length === 0) {
+    setDraftSearchRows([]);
+    setDraftSearchError('');
+    setIsLoadingDraftSearch(false);
+    return undefined;
+  }
+
+  let cancelled = false;
+
+  async function loadDraftSearch() {
+    setIsLoadingDraftSearch(true);
+    setDraftSearchError('');
+
+    try {
+      const results = await Promise.all(
+        queries.map((query) =>
+          playerApi.searchPlayers({
+            q: query,
+            limit: SEARCH_LIMIT,
+            leagueType: league?.config?.leagueType || null,
+            includeInactive: false,
+            rosterSlots: league?.config?.rosterSlots || {},
+            filledSlots: draftTargetTeam?.filledSlots || {},
+          })
+        )
+      );
+
+      if (cancelled) return;
+
+      const combinedPlayers = results.flatMap((data) =>
+        Array.isArray(data.players) ? data.players : []
+      );
+
+      const uniquePlayers = Array.from(
+        new Map(combinedPlayers.map((player) => [player.mlbPlayerId, player])).values()
+      );
+
+
+      const searchedRows = uniquePlayers.map((player) =>
+        toDraftSearchRow(player, valuationRowsById)
+      );
+
+
+      setDraftSearchRows(searchedRows);
+    } catch (err) {
+      if (cancelled) return;
       setDraftSearchRows([]);
-      setDraftSearchError('');
-      setIsLoadingDraftSearch(false);
-      return undefined;
-    }
-
-    let cancelled = false;
-
-    async function loadDraftSearch() {
-      setIsLoadingDraftSearch(true);
-      setDraftSearchError('');
-
-      try {
-        const data = await playerApi.searchPlayers({
-          q: normalizedLookupQuery,
-          limit: SEARCH_LIMIT,
-          leagueType: league?.config?.leagueType || null,
-          includeInactive: false,
-          rosterSlots: league?.config?.rosterSlots || {},
-          filledSlots: draftTargetTeam?.filledSlots || {},
-        });
-        if (cancelled) return;
-
-        const searchedRows = Array.isArray(data.players)
-          ? data.players.map((player) => toDraftSearchRow(player, valuationRowsById))
-          : [];
-        setDraftSearchRows(searchedRows);
-      } catch (err) {
-        if (cancelled) return;
-        setDraftSearchRows([]);
-        setDraftSearchError(err.message || 'Failed to search draft players');
-      } finally {
-        if (!cancelled) {
-          setIsLoadingDraftSearch(false);
-        }
+      setDraftSearchError(err.message || 'Failed to search draft players');
+    } finally {
+      if (!cancelled) {
+        setIsLoadingDraftSearch(false);
       }
     }
+  }
+  loadDraftSearch();
 
-    loadDraftSearch();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeView, draftTargetTeamKey, league?.config?.leagueType, league?.config?.rosterSlots, lookupQuery, valuationRowsById, draftTargetTeam]);
+  return () => {
+    cancelled = true;
+  };
+}, [
+  activeView,
+  draftTargetTeamKey,
+  league?.config?.leagueType,
+  league?.config?.rosterSlots,
+  lookupQuery,
+  valuationRowsById,
+  draftTargetTeam,
+]);
 
   const filteredDraftRows = useMemo(() => {
     const sourceRows = lookupQuery.trim() ? draftSearchRows : rows;
@@ -290,6 +318,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
       return true;
     });
   }, [draftNeedFilter, draftRoleFilter, draftSearchRows, draftTeamFilter, draftedPlayerIds, lookupQuery, rows]);
+  console.log('filteredDraftRows', filteredDraftRows);
 
   const selectedDraftPlayer = filteredDraftRows.find((row) => row.id === selectedDraftPlayerId)
     || rows.find((row) => row.id === selectedDraftPlayerId)

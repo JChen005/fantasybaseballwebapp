@@ -24,6 +24,10 @@ const leagueSchema = new mongoose.Schema(
       trim: true,
       default: 'My League',
     },
+    playerNotes: [{
+      id: Number,
+      notes: String,
+    }],
     config: {
       leagueType: {
         type: String,
