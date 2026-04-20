@@ -56,40 +56,38 @@ export default function RosterView({ rosterRows, rosterSlots, getPersistedAssign
                   </div>
                 </div>
 
-                {!team.players.length ? (
-                  <p className="text-sm text-slate-600">No players on this roster yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {team.players.map((player) => (
-                      <div
-                        key={`${team.teamKey}-${player.playerId}`}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <div>
-                          <p className="font-medium text-white">{player.playerName || player.playerId}</p>
-                          <p className="text-xs text-slate-500">
-                            {player.status}
-                            {getPersistedAssignedSlots(player).length
-                              ? ` · ${getPersistedAssignedSlots(player).join(', ')}`
-                              : ''}
-                            {player.contract ? ` · ${player.contract}` : ''}
-                          </p>
+                {!isExpanded ? (
+                  !team.players.length ? (
+                    <p className="text-sm text-slate-600">No players on this roster yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {team.players.map((player) => (
+                        <div
+                          key={`${team.teamKey}-${player.playerId}`}
+                          className="flex items-center justify-between gap-3 text-sm"
+                        >
+                          <div>
+                            <p className="font-medium text-white">{player.playerName || player.playerId}</p>
+                            <p className="text-xs text-slate-500">
+                              {player.status}
+                              {getPersistedAssignedSlots(player).length
+                                ? ` · ${getPersistedAssignedSlots(player).join(', ')}`
+                                : ''}
+                              {player.contract ? ` · ${player.contract}` : ''}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-slate-200">${player.cost || 0}</p>
                         </div>
-                        <p className="font-semibold text-slate-200">${player.cost || 0}</p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  <TeamSlotBoard
+                    team={team}
+                    rosterSlots={rosterSlots}
+                    getPersistedAssignedSlots={getPersistedAssignedSlots}
+                  />
                 )}
-
-                {isExpanded ? (
-                  <div className="mt-4">
-                    <TeamSlotBoard
-                      team={team}
-                      rosterSlots={rosterSlots}
-                      getPersistedAssignedSlots={getPersistedAssignedSlots}
-                    />
-                  </div>
-                ) : null}
               </section>
             );
           })}
@@ -156,12 +154,12 @@ function TeamSlotBoard({ team, rosterSlots, getPersistedAssignedSlots }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-3">
+    <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-2">
       <table className="min-w-full text-sm">
         <thead className="sticky top-0 bg-slate-950">
           <tr className="border-b border-slate-200 text-left">
             <th className="w-16 px-3 py-3 font-medium text-white">Slot</th>
-            <th className="min-w-52 px-3 py-3 font-medium text-white">Player</th>
+            <th className="min-w-40 px-3 py-3 font-medium text-white">Player</th>
             <th className="w-24 px-3 py-3 font-medium text-white">Contract</th>
             <th className="w-24 px-3 py-3 font-medium text-white">Cost</th>
             <th className="w-28 px-3 py-3 font-medium text-white">Status</th>

@@ -3,8 +3,8 @@ export const DRAFT_VALUATION_LIMIT = 500;
 
 export const DRAFT_VIEW_TABS = [
   { id: 'draft', label: 'Draft Board' },
-  { id: 'recent', label: 'Recent Picks' },
   { id: 'roster', label: 'Team Roster' },
+  { id: 'recent', label: 'Recent Picks' },
   { id: 'depth', label: 'Player Depth' },
   { id: 'budget', label: 'Budget' },
   { id: 'lookup', label: 'Player Lookup' },
