@@ -275,7 +275,6 @@ export default function useDraftPageData({ activeView, leagueId }) {
         new Map(combinedPlayers.map((player) => [player.mlbPlayerId, player])).values()
       );
 
-
       const searchedRows = uniquePlayers.map((player) =>
         toDraftSearchRow(player, valuationRowsById)
       );

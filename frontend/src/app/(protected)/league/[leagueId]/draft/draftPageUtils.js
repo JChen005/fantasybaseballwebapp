@@ -97,6 +97,7 @@ export function buildPlayerRow(player) {
     headshotUrl: player.headshotUrl,
     statsLastYear: player.statsLastYear || null,
     stats3Year: player.stats3Year || null,
+    injuryStatus: player.injuryStatus,
   };
 }
 
@@ -117,9 +118,7 @@ export function toSearchRow(player) {
 }
 
 export function toDraftSearchRow(player, valuationRowsById) {
-  console.log("toDraftSearchRow player:", player);
   const fallbackRow = toSearchRow(player);
-  console.log("toDraftSearchRow fallbackRow:", fallbackRow);
   const matchingValuationRow = valuationRowsById.get(String(fallbackRow.id));
 
   return {

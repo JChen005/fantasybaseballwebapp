@@ -198,6 +198,7 @@ export default function DraftBoardView({
                               row={row}
                               statsLastYear={row.statsLastYear}
                               stats3Year={row.stats3Year}
+                              injuryStatus={row.injuryStatus}
                               note={playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? ''}
                               onNoteChange={handleNoteChange}
                               onNoteSave={handleNoteSave}
@@ -347,6 +348,7 @@ function DraftStatsTable({
   row,
   statsLastYear,
   stats3Year,
+  injuryStatus,
   note,
   onNoteChange,
   onNoteSave,
@@ -390,6 +392,15 @@ function DraftStatsTable({
             statKeys={statKeys}
             formatStat={formatStat}
           />
+
+          <tr className="border-t border-slate-700">
+            <td colSpan={statKeys.length + 1} className="px-2 py-2">
+              <div className="text-xs text-slate-300">
+                <span className="font-medium text-slate-400">Injury status:</span>{' '}
+                <span className="text-white">{injuryStatus || 'Active'}</span>
+              </div>
+            </td>
+          </tr>
 
           <tr className="border-t border-slate-700">
             <td colSpan={statKeys.length + 1} className="p-0">
