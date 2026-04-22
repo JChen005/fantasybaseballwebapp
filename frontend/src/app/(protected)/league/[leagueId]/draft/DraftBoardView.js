@@ -199,6 +199,7 @@ export default function DraftBoardView({
                               statsLastYear={row.statsLastYear}
                               stats3Year={row.stats3Year}
                               injuryStatus={row.injuryStatus}
+                              transactions={row.transactions}
                               note={playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? ''}
                               onNoteChange={handleNoteChange}
                               onNoteSave={handleNoteSave}
@@ -349,11 +350,14 @@ function DraftStatsTable({
   statsLastYear,
   stats3Year,
   injuryStatus,
+  transactions,
   note,
   onNoteChange,
   onNoteSave,
 }) {
+  const [showTransactions, setShowTransactions] = useState(false);
   const statKeys = ['avg', 'hr', 'rbi', 'sb', 'w', 'k', 'era', 'whip'];
+  const transactionCount = Array.isArray(transactions) ? transactions.length : 0;
 
   function formatStat(value, key) {
     if (value === null || value === undefined || value === '') return '—';
@@ -395,12 +399,47 @@ function DraftStatsTable({
 
           <tr className="border-t border-slate-700">
             <td colSpan={statKeys.length + 1} className="px-2 py-2">
-              <div className="text-xs text-slate-300">
-                <span className="font-medium text-slate-400">Injury status:</span>{' '}
-                <span className="text-white">{injuryStatus || 'Active'}</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
+                <span>
+                  <span className="font-medium text-slate-400">Injury status:</span>{' '}
+                  <span className="text-white">{injuryStatus || 'Active'}</span>
+                </span>
+
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-left transition hover:text-white"
+                  onClick={() => setShowTransactions((prev) => !prev)}
+                >
+                  <span className="font-medium text-slate-400">Transactions:</span>
+                  <span className="text-white">{transactionCount}</span>
+                  <span className="text-slate-400">{showTransactions ? '▾' : '▸'}</span>
+                </button>
               </div>
             </td>
           </tr>
+
+          {showTransactions ? (
+            <tr className="border-t border-slate-700">
+              <td colSpan={statKeys.length + 1} className="px-2 py-2">
+                {transactionCount ? (
+                  <div className="space-y-1 text-xs">
+                    {transactions.map((transaction, index) => (
+                      <div
+                        key={`${transaction.date}-${transaction.type}-${index}`}
+                        className="text-slate-300"
+                      >
+                        <span className="text-slate-400">{transaction.date || '—'}</span>
+                        <span className="mx-2 text-white">{transaction.type || '—'}</span>
+                        <span>{transaction.detail || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">No transactions</div>
+                )}
+              </td>
+            </tr>
+          ) : null}
 
           <tr className="border-t border-slate-700">
             <td colSpan={statKeys.length + 1} className="p-0">

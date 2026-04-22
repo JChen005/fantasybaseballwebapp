@@ -98,6 +98,7 @@ export function buildPlayerRow(player) {
     statsLastYear: player.statsLastYear || null,
     stats3Year: player.stats3Year || null,
     injuryStatus: player.injuryStatus,
+    transactions: player.transactions
   };
 }
 
