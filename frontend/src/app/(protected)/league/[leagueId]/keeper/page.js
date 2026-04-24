@@ -16,6 +16,9 @@ export default function Page() {
 
   const keeperData = useKeeperPageData({ leagueId, selectedPlayer });
   const { draftState, league, loadingError } = keeperData;
+  const excludedPlayerIds = (draftState?.teams || []).flatMap((team) =>
+    (team.players || []).map((player) => Number(player.playerId)).filter(Number.isFinite)
+  );
 
   return (
     <>
@@ -23,6 +26,7 @@ export default function Page() {
         selectedPlayer={selectedPlayer}
         setSelectedPlayer={setSelectedPlayer}
         leagueType={league?.config?.leagueType || null}
+        excludedPlayerIds={excludedPlayerIds}
       />
       <section className="space-y-4">
         <KeeperHeader basePath={basePath} />

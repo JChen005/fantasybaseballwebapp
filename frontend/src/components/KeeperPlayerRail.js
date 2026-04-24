@@ -5,10 +5,16 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { playerApi } from 'lib/playerApi';
 
-export default function KeeperPlayerRail({ selectedPlayer, setSelectedPlayer, leagueType = null }) {
+export default function KeeperPlayerRail({
+  selectedPlayer,
+  setSelectedPlayer,
+  leagueType = null,
+  excludedPlayerIds = [],
+}) {
   const [players, setPlayers] = useState(null);
   const pathname = usePathname();
   const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
+  const excludedPlayerIdSet = new Set((excludedPlayerIds || []).map((id) => Number(id)));
 
   function handleSearch(event) {
   const value = event.currentTarget.value;
@@ -43,7 +49,7 @@ export default function KeeperPlayerRail({ selectedPlayer, setSelectedPlayer, le
       new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
     );
 
-    setPlayers(uniquePlayers);
+    setPlayers(uniquePlayers.filter((player) => !excludedPlayerIdSet.has(Number(player?.mlbPlayerId))));
   });
 }
 
@@ -115,4 +121,3 @@ function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
     </button>
   );
 }
-
