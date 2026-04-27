@@ -275,6 +275,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
         new Map(combinedPlayers.map((player) => [player.mlbPlayerId, player])).values()
       );
 
+
       const searchedRows = uniquePlayers.map((player) =>
         toDraftSearchRow(player, valuationRowsById)
       );
@@ -308,6 +309,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
 
   const filteredDraftRows = useMemo(() => {
     const sourceRows = lookupQuery.trim() ? draftSearchRows : rows;
+    console.log("sourceRows", sourceRows)
     return sourceRows.filter((row) => {
       if (draftedPlayerIds.has(String(row.id))) return false;
       if (draftTeamFilter !== 'ALL' && row.team !== draftTeamFilter) return false;
@@ -315,7 +317,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
       if (draftNeedFilter === 'YES' && !row.fillsNeed) return false;
       if (draftNeedFilter === 'NO' && row.fillsNeed) return false;
       return true;
-    });
+    })
+    .sort((a, b) => Number(b.adjustedValue || 0) - Number(a.adjustedValue || 0))
   }, [draftNeedFilter, draftRoleFilter, draftSearchRows, draftTeamFilter, draftedPlayerIds, lookupQuery, rows]);
   console.log('filteredDraftRows', filteredDraftRows);
 

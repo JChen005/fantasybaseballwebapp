@@ -2,50 +2,65 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { playerApi } from 'lib/playerApi';
 
-export default function KeeperPlayerRail({ selectedPlayer, setSelectedPlayer, leagueType = null }) {
+export default function KeeperPlayerRail({
+  selectedPlayer,
+  setSelectedPlayer,
+  leagueType = null,
+  excludedPlayerIds = [],
+}) {
   const [players, setPlayers] = useState(null);
   const pathname = usePathname();
   const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
 
+  useEffect(() => {
+    setPlayers(prevPlayers => {
+      if (!prevPlayers) return prevPlayers;
+
+      return prevPlayers.filter(
+        player => !excludedPlayerIds.includes(player.mlbPlayerId)
+      );
+    });
+  }, [excludedPlayerIds]);
+
   function handleSearch(event) {
-  const value = event.currentTarget.value;
+    const value = event.currentTarget.value;
 
-  if (value.length < 3) {
-    setPlayers([]);
-    return;
+    if (value.length < 3) {
+      setPlayers([]);
+      return;
+    }
+
+    const queries = value
+      .split(',')
+      .map(q => q.trim())
+      .filter(q => q.length >= 3);
+
+    if (queries.length === 0) {
+      setPlayers([]);
+      return;
+    }
+
+    Promise.all(
+      queries.map(query =>
+        playerApi.getPlayersByName(query, { leagueType, limit: 20 })
+      )
+    ).then(results => {
+      const combinedPlayers = results.flatMap(r => r.players);
+
+      const uniquePlayers = Array.from(
+        new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
+      );
+
+      const filteredPlayers = uniquePlayers.filter(
+        player => !excludedPlayerIds.includes(player.mlbPlayerId)
+      );
+
+      setPlayers(filteredPlayers);
+    });
   }
-
-  // Split by commas and clean up terms
-  const queries = value
-    .split(',')
-    .map(q => q.trim())
-    .filter(q => q.length >= 3);
-
-  if (queries.length === 0) {
-    setPlayers([]);
-    return;
-  }
-
-  // Run all queries in parallel
-  Promise.all(
-    queries.map(query =>
-      playerApi.getPlayersByName(query, { leagueType, limit: 20 })
-    )
-  ).then(results => {
-    // Flatten results into a single array
-    const combinedPlayers = results.flatMap(r => r.players);
-
-    // Optional: dedupe by mlbPlayerId
-    const uniquePlayers = Array.from(
-      new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
-    );
-
-    setPlayers(uniquePlayers);
-  });
-}
 
   return (
     <div className="fixed left-0 top-0 h-full w-55 p-3">
@@ -63,24 +78,27 @@ export default function KeeperPlayerRail({ selectedPlayer, setSelectedPlayer, le
           Taxi
         </Link>
       </div>
+
       <input
         className="input input-bordered my-2"
         placeholder="Search Players..."
         onKeyDown={handleSearch}
       />
-      {players && players.map((player, index) => (
-        <PlayerBox
-          key={index}
-          player={player}
-          selectedPlayer={selectedPlayer}
-          setSelectedPlayer={setSelectedPlayer}
-        />
-      ))}
+
+      {players &&
+        players.map(player => (
+          <PlayerBox
+            key={player.mlbPlayerId}
+            player={player}
+            selectedPlayer={selectedPlayer}
+            setSelectedPlayer={setSelectedPlayer}
+          />
+        ))}
     </div>
   );
 }
 
-//sub components
+// sub components
 
 function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
   const isSelected = selectedPlayer?.mlbPlayerId === player.mlbPlayerId;
@@ -115,4 +133,3 @@ function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
     </button>
   );
 }
-
