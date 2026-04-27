@@ -39,6 +39,7 @@ const draftedPlayerSchema = new mongoose.Schema(
     contract: {
       type: String,
       enum: ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'],
+      default: 'S1'
     },
     taxiSlot: {
       type: Number,

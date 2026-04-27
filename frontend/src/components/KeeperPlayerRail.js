@@ -5,23 +5,66 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { playerApi } from 'lib/playerApi';
 
+function normalizePositions(player) {
+  const raw =
+    player?.eligiblePositions ||
+    player?.positions ||
+    player?.position ||
+    player?.primaryPosition ||
+    '';
+
+  const positions = Array.isArray(raw)
+    ? raw
+    : String(raw)
+        .split(/[,\s/]+/)
+        .map((pos) => pos.trim())
+        .filter(Boolean);
+
+  return Array.from(new Set(positions.map((pos) => pos.toUpperCase())));
+}
+
+function getEligibleKeeperSlots(player) {
+  const positions = normalizePositions(player);
+  const slots = new Set();
+
+  for (const pos of positions) {
+    if (pos === 'SP' || pos === 'RP' || pos === 'P') {
+      slots.add('P');
+    } else if (pos === 'LF' || pos === 'CF' || pos === 'RF' || pos === 'OF') {
+      slots.add('OF');
+    } else if (['C', '1B', '2B', '3B', 'SS'].includes(pos)) {
+      slots.add(pos);
+    }
+  }
+
+  if ([...slots].some((slot) => slot !== 'P')) {
+    slots.add('UTIL');
+  }
+
+  slots.add('BN');
+
+  return Array.from(slots);
+}
+
+export { normalizePositions, getEligibleKeeperSlots };
+
 export default function KeeperPlayerRail({
   selectedPlayer,
   setSelectedPlayer,
   leagueType = null,
   excludedPlayerIds = [],
+  showEligible = false
 }) {
   const [players, setPlayers] = useState(null);
   const pathname = usePathname();
   const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
-  const excludedPlayerIdSet = new Set((excludedPlayerIds || []).map((id) => Number(id)));
 
   useEffect(() => {
-    setPlayers(prevPlayers => {
+    setPlayers((prevPlayers) => {
       if (!prevPlayers) return prevPlayers;
 
       return prevPlayers.filter(
-        player => !excludedPlayerIds.includes(player.mlbPlayerId)
+        (player) => !excludedPlayerIds.includes(Number(player.mlbPlayerId))
       );
     });
   }, [excludedPlayerIds]);
@@ -36,8 +79,8 @@ export default function KeeperPlayerRail({
 
     const queries = value
       .split(',')
-      .map(q => q.trim())
-      .filter(q => q.length >= 3);
+      .map((q) => q.trim())
+      .filter((q) => q.length >= 3);
 
     if (queries.length === 0) {
       setPlayers([]);
@@ -45,52 +88,23 @@ export default function KeeperPlayerRail({
     }
 
     Promise.all(
-      queries.map(query =>
+      queries.map((query) =>
         playerApi.getPlayersByName(query, { leagueType, limit: 20 })
       )
-    ).then(results => {
-      const combinedPlayers = results.flatMap(r => r.players);
+    ).then((results) => {
+      const combinedPlayers = results.flatMap((result) => result.players || []);
 
       const uniquePlayers = Array.from(
-        new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
+        new Map(combinedPlayers.map((player) => [player.mlbPlayerId, player])).values()
       );
 
       const filteredPlayers = uniquePlayers.filter(
-        player => !excludedPlayerIds.includes(player.mlbPlayerId)
+        (player) => !excludedPlayerIds.includes(Number(player.mlbPlayerId))
       );
 
       setPlayers(filteredPlayers);
     });
   }
-
-  // Split by commas and clean up terms
-  const queries = value
-    .split(',')
-    .map(q => q.trim())
-    .filter(q => q.length >= 3);
-
-  if (queries.length === 0) {
-    setPlayers([]);
-    return;
-  }
-
-  // Run all queries in parallel
-  Promise.all(
-    queries.map(query =>
-      playerApi.getPlayersByName(query, { leagueType, limit: 20 })
-    )
-  ).then(results => {
-    // Flatten results into a single array
-    const combinedPlayers = results.flatMap(r => r.players);
-
-    // Optional: dedupe by mlbPlayerId
-    const uniquePlayers = Array.from(
-      new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
-    );
-
-    setPlayers(uniquePlayers.filter((player) => !excludedPlayerIdSet.has(Number(player?.mlbPlayerId))));
-  });
-}
 
   return (
     <div className="fixed left-0 top-0 h-full w-55 p-3">
@@ -116,12 +130,13 @@ export default function KeeperPlayerRail({
       />
 
       {players &&
-        players.map(player => (
+        players.map((player) => (
           <PlayerBox
             key={player.mlbPlayerId}
             player={player}
             selectedPlayer={selectedPlayer}
             setSelectedPlayer={setSelectedPlayer}
+            showEligible={showEligible}
           />
         ))}
     </div>
@@ -130,8 +145,10 @@ export default function KeeperPlayerRail({
 
 // sub components
 
-function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
+function PlayerBox({ player, selectedPlayer, setSelectedPlayer, showEligible }) {
   const isSelected = selectedPlayer?.mlbPlayerId === player.mlbPlayerId;
+  const positions = normalizePositions(player);
+  const eligibleSlots = getEligibleKeeperSlots(player);
 
   return (
     <button
@@ -159,6 +176,10 @@ function PlayerBox({ player, selectedPlayer, setSelectedPlayer }) {
         <div className="text-sm font-semibold text-slate-900">
           {player.name}
         </div>
+
+        {showEligible && <div className="text-[11px] text-slate-400">
+          {eligibleSlots.join(', ')}
+        </div>}
       </div>
     </button>
   );

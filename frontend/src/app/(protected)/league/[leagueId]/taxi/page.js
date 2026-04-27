@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import KeeperPlayerRail from 'components/KeeperPlayerRail';
@@ -20,9 +19,20 @@ export default function Page() {
   const [league, setLeague] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [error, setError] = useState('');
-  const excludedPlayerIds = (draftState?.teams || []).flatMap((team) =>
-    (team.players || []).map((player) => Number(player.playerId)).filter(Number.isFinite)
-  );
+  const [taxiBoardPlayerIds, setTaxiBoardPlayerIds] = useState([]);
+
+  const rosterPlayerIds = useMemo(() => {
+    return (draftState?.teams || []).flatMap((team) =>
+      (team.players || [])
+        .filter((player) => String(player.status || '').trim().toUpperCase() !== 'TAXI')
+        .map((player) => Number(player.playerId))
+        .filter(Number.isFinite)
+    );
+  }, [draftState]);
+
+  const excludedPlayerIds = useMemo(() => {
+    return Array.from(new Set([...rosterPlayerIds, ...taxiBoardPlayerIds]));
+  }, [rosterPlayerIds, taxiBoardPlayerIds]);
 
   useEffect(() => {
     if (!leagueId) return;
@@ -55,7 +65,6 @@ export default function Page() {
               </p>
               <h1 className="mt-2 text-2xl font-semibold text-white">Taxi Squad</h1>
             </div>
-
           </div>
         </div>
 
@@ -72,6 +81,8 @@ export default function Page() {
               leagueId={leagueId}
               draftState={draftState}
               selectedPlayer={selectedPlayer}
+              setSelectedPlayer={setSelectedPlayer}
+              setTaxiBoardPlayerIds={setTaxiBoardPlayerIds}
               onSaved={setDraftState}
             />
           </>
@@ -81,7 +92,7 @@ export default function Page() {
   );
 }
 
-//Helper functions
+// Helper functions
 
 function buildTaxiRowPlan() {
   return Array.from({ length: TAXI_SLOT_COUNT }, (_, index) => ({
@@ -202,7 +213,14 @@ function boardToDraftStateTeams(board, existingTeams = []) {
   });
 }
 
-function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
+function TaxiBoardTable({
+  leagueId,
+  draftState,
+  selectedPlayer,
+  setSelectedPlayer,
+  setTaxiBoardPlayerIds,
+  onSaved,
+}) {
   const teams = draftState?.teams || [];
   const teamOptions = teams.map((team) => ({
     key: team.teamKey,
@@ -219,6 +237,15 @@ function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
   useEffect(() => {
     setBoard(draftStateTeamsToTaxiBoard(teams));
   }, [teams]);
+
+  useEffect(() => {
+    const ids = Object.values(board || {})
+      .flat()
+      .map((row) => Number(row?.playerId))
+      .filter(Number.isFinite);
+
+    setTaxiBoardPlayerIds(Array.from(new Set(ids)));
+  }, [board, setTaxiBoardPlayerIds]);
 
   useEffect(() => {
     if (!selectedTeamKey || !teamOptions.some((team) => team.key === selectedTeamKey)) {
@@ -310,6 +337,8 @@ function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
       playerName: selectedPlayer.name || selectedPlayer.canonicalName || '',
       status: 'TAXI',
     });
+
+    setSelectedPlayer(null);
   }
 
   async function handleSaveBoard() {
@@ -318,7 +347,7 @@ function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
       setError('');
 
       const updatedTeams = boardToDraftStateTeams(board, teams);
-      console.log('Saving taxi board with teams:', updatedTeams);
+
       const response = await leagueApi.updateDraftState(leagueId, {
         ...draftState,
         teams: updatedTeams,
@@ -437,6 +466,7 @@ function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
                   status: 'TAXI',
                   taxiSlot: slotIndex,
                 };
+
                 const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
 
                 return (

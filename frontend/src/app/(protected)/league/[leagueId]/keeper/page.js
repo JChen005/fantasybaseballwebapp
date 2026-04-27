@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
-import KeeperPlayerRail from 'components/KeeperPlayerRail';
+import KeeperPlayerRail, { getEligibleKeeperSlots } from 'components/KeeperPlayerRail';
 import KeeperBoardView from './KeeperBoardView';
 import KeeperHeader from './KeeperHeader';
 import useKeeperPageData from './useKeeperPageData';
@@ -18,24 +18,62 @@ export default function Page() {
     : params?.leagueId;
 
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [slotError, setSlotError] = useState('');
 
   const keeperData = useKeeperPageData({ leagueId, selectedPlayer });
-  const { draftState, league, loadingError } = keeperData;
-  const excludedPlayerIds = (draftState?.teams || []).flatMap((team) =>
-    (team.players || []).map((player) => Number(player.playerId)).filter(Number.isFinite)
-  );
+  const { draftState, league, loadingError, currentRows } = keeperData;
+
+  const excludedPlayerIds = useMemo(() => {
+    if (!currentRows) return [];
+
+    return Array.from(
+      new Set(
+        currentRows
+          .map((row) => row.player?.mlbPlayerId || row.mlbPlayerId || row.playerId)
+          .filter(Boolean)
+      )
+    );
+  }, [currentRows]);
+
+  const handlePlayerClick = (...args) => {
+    if (!selectedPlayer?.mlbPlayerId) return;
+
+    const slot = args[1];
+    const eligibleSlots = getEligibleKeeperSlots(selectedPlayer);
+
+    if (!eligibleSlots.includes(slot)) {
+      setSlotError(
+        `${selectedPlayer.name || 'Selected player'} is not eligible for ${slot}. Eligible: ${eligibleSlots.join(', ')}`
+      );
+      return;
+    }
+
+    setSlotError('');
+
+    keeperData.handlePlayerClick?.(...args);
+
+    setSelectedPlayer(null);
+  };
 
   return (
     <>
       <KeeperPlayerRail
         selectedPlayer={selectedPlayer}
-        setSelectedPlayer={setSelectedPlayer}
+        setSelectedPlayer={(player) => {
+          setSlotError('');
+          setSelectedPlayer(player);
+        }}
         leagueType={league?.config?.leagueType || null}
         excludedPlayerIds={excludedPlayerIds}
+        showEligible
       />
 
       <section className="space-y-4">
         <KeeperHeader basePath={basePath} />
+
+        {slotError ? (
+          <p className="text-sm text-red-600">{slotError}</p>
+        ) : null}
 
         {loadingError && (!draftState || !league) ? (
           <p className="text-sm text-red-600">{loadingError}</p>
@@ -51,7 +89,7 @@ export default function Page() {
 
             <KeeperBoardView
               {...keeperData}
-              handlePlayerClick={handlePlayerClick} // 👈 override here
+              handlePlayerClick={handlePlayerClick}
             />
           </>
         )}
