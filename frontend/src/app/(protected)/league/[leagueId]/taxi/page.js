@@ -20,6 +20,9 @@ export default function Page() {
   const [league, setLeague] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [error, setError] = useState('');
+  const excludedPlayerIds = (draftState?.teams || []).flatMap((team) =>
+    (team.players || []).map((player) => Number(player.playerId)).filter(Number.isFinite)
+  );
 
   useEffect(() => {
     if (!leagueId) return;
@@ -40,6 +43,7 @@ export default function Page() {
         selectedPlayer={selectedPlayer}
         setSelectedPlayer={setSelectedPlayer}
         leagueType={league?.config?.leagueType || null}
+        excludedPlayerIds={excludedPlayerIds}
       />
 
       <section className="space-y-4">
@@ -81,14 +85,14 @@ export default function Page() {
 
 function buildTaxiRowPlan() {
   return Array.from({ length: TAXI_SLOT_COUNT }, (_, index) => ({
-    slot: 'TAXI',
+    slot: 'BN',
     slotIndex: index,
   }));
 }
 
 function createEmptyTaxiRows() {
   return Array.from({ length: TAXI_SLOT_COUNT }, (_, index) => ({
-    slot: 'TAXI',
+    slot: 'BN',
     slotIndex: index,
     playerId: null,
     playerName: '',
@@ -137,7 +141,7 @@ function draftStateTeamsToTaxiBoard(teams = []) {
       }
 
       rows[taxiSlot] = {
-        slot: 'TAXI',
+        slot: 'BN',
         slotIndex: taxiSlot,
         playerId: player?.playerId ?? null,
         playerName: player?.playerName || '',
@@ -168,8 +172,8 @@ function boardToDraftStateTeams(board, existingTeams = []) {
         cost: 0,
         status: 'TAXI',
         countsAgainstBudget: false,
-        assignedSlot: '',
-        assignedSlots: [],
+        assignedSlot: 'BN',
+        assignedSlots: ['BN'],
         contract: undefined,
         taxiSlot: row.slotIndex,
       }));
@@ -497,4 +501,3 @@ function TaxiBoardTable({ leagueId, draftState, selectedPlayer, onSaved }) {
     </div>
   );
 }
-

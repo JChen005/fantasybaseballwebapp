@@ -20,7 +20,7 @@ const draftedPlayerSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'],
+      enum: ['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'],
       required: true,
     },
     countsAgainstBudget: {
@@ -118,7 +118,7 @@ const draftPickSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'],
+      enum: ['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'],
       default: 'DRAFTED',
     },
     timestamp: {

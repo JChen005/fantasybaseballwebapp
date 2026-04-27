@@ -14,6 +14,7 @@ export default function KeeperPlayerRail({
   const [players, setPlayers] = useState(null);
   const pathname = usePathname();
   const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
+  const excludedPlayerIdSet = new Set((excludedPlayerIds || []).map((id) => Number(id)));
 
   useEffect(() => {
     setPlayers(prevPlayers => {
@@ -61,6 +62,35 @@ export default function KeeperPlayerRail({
       setPlayers(filteredPlayers);
     });
   }
+
+  // Split by commas and clean up terms
+  const queries = value
+    .split(',')
+    .map(q => q.trim())
+    .filter(q => q.length >= 3);
+
+  if (queries.length === 0) {
+    setPlayers([]);
+    return;
+  }
+
+  // Run all queries in parallel
+  Promise.all(
+    queries.map(query =>
+      playerApi.getPlayersByName(query, { leagueType, limit: 20 })
+    )
+  ).then(results => {
+    // Flatten results into a single array
+    const combinedPlayers = results.flatMap(r => r.players);
+
+    // Optional: dedupe by mlbPlayerId
+    const uniquePlayers = Array.from(
+      new Map(combinedPlayers.map(p => [p.mlbPlayerId, p])).values()
+    );
+
+    setPlayers(uniquePlayers.filter((player) => !excludedPlayerIdSet.has(Number(player?.mlbPlayerId))));
+  });
+}
 
   return (
     <div className="fixed left-0 top-0 h-full w-55 p-3">

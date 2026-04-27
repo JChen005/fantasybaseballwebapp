@@ -20,28 +20,10 @@ export default function Page() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
 
   const keeperData = useKeeperPageData({ leagueId, selectedPlayer });
-  const { draftState, league, loadingError, currentRows } = keeperData;
-
-  // 👇 derive excluded players from board
-  const excludedPlayerIds = useMemo(() => {
-    if (!currentRows) return [];
-
-    return Array.from(
-      new Set(
-        currentRows
-          .map(row => row.player?.mlbPlayerId || row.mlbPlayerId || row.playerId)
-          .filter(Boolean)
-      )
-    );
-  }, [currentRows]);
-
-  // 👇 wrap the original handler
-  const handlePlayerClick = (...args) => {
-    keeperData.handlePlayerClick?.(...args);
-
-    // 👇 reset after assignment
-    setSelectedPlayer(null);
-  };
+  const { draftState, league, loadingError } = keeperData;
+  const excludedPlayerIds = (draftState?.teams || []).flatMap((team) =>
+    (team.players || []).map((player) => Number(player.playerId)).filter(Number.isFinite)
+  );
 
   return (
     <>

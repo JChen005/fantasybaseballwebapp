@@ -36,6 +36,8 @@ export const draftkitApi = {
   createLeague: (payload) => post("/api/leagues", payload),
   updateLeague: (leagueId, payload) => post(`/api/leagues/${leagueId}`, payload),
   getLicenseStatus: () => get("/api/api-center/license-status"),
-  triggerMockTransaction: (payload = {}) =>
-    post("/api/api-center/admin/mock-transaction", payload),
+  generatePlayerKey: (payload) => post('/api/api-center/admin/generate-player-key', payload),
+  refreshPlayerData: () => post('/api/api-center/admin/refresh-player-data', {}),
+  createPlayerTransaction: (payload) => post('/api/api-center/admin/player-transaction', payload),
+  loadDemoStage: (payload) => post('/api/api-center/demo/load-stage', payload),
 };

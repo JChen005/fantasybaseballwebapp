@@ -11,6 +11,8 @@ import {
   isEntryEmpty,
 } from './keeperPageUtils';
 
+const EMPTY_ARRAY = [];
+
 export default function useKeeperPageData({ leagueId, selectedPlayer }) {
   const [draftState, setDraftState] = useState(null);
   const [league, setLeague] = useState(null);
@@ -35,7 +37,7 @@ export default function useKeeperPageData({ leagueId, selectedPlayer }) {
       });
   }, [leagueId]);
 
-  const teams = draftState?.teams || [];
+  const teams = useMemo(() => draftState?.teams || EMPTY_ARRAY, [draftState]);
   const config = league?.config || null;
 
   const teamOptions = useMemo(

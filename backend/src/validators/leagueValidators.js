@@ -196,7 +196,7 @@ function validateDraftStatePayload(payload = {}) {
             if (!playerId) {
               throw new AppError(`teams[${teamIndex}].players[${playerIndex}].playerId is required`, 400);
             }
-            if (!['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'].includes(status)) {
+            if (!['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'].includes(status)) {
               throw new AppError(`teams[${teamIndex}].players[${playerIndex}].status is invalid`, 400);
             }
 
@@ -229,7 +229,8 @@ function validateDraftStatePayload(payload = {}) {
               playerName: String(player.playerName || '').trim(),
               cost,
               status,
-              countsAgainstBudget: assignedSlot !== 'BN' && status !== 'RESERVE' && status !== 'TAXI',
+              countsAgainstBudget:
+                assignedSlot !== 'BN' && status !== 'MINOR' && status !== 'TAXI',
               assignedSlot,
               assignedSlots: Array.isArray(player.assignedSlots)
                 ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
@@ -282,7 +283,7 @@ function validateDraftStatePayload(payload = {}) {
       if (!Number.isFinite(cost) || cost < 0) {
         throw new AppError(`picks[${pickIndex}].cost must be non-negative`, 400);
       }
-      if (!['DRAFTED', 'KEEPER', 'RESERVE', 'TAXI'].includes(status)) {
+      if (!['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'].includes(status)) {
         throw new AppError(`picks[${pickIndex}].status is invalid`, 400);
       }
 
