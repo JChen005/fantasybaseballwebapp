@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { playerApi } from 'lib/playerApi';
 import { leagueApi } from 'lib/leagueApi';
 import { DRAFT_VALUATION_LIMIT, MLB_DEPTH_CHART_TEAMS, SEARCH_LIMIT } from './draftPageConstants';
@@ -47,6 +47,10 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [isLoadingDepth, setIsLoadingDepth] = useState(false);
   const [isLoadingPlayerSearch, setIsLoadingPlayerSearch] = useState(false);
   const [contract, setContract] = useState('F3');
+  const [selectedRosterMove, setSelectedRosterMove] = useState(null);
+  const [rosterMoveError, setRosterMoveError] = useState('');
+  const [isMovingRosterPlayer, setIsMovingRosterPlayer] = useState(false);
+  const rosterMoveSelectionKeyRef = useRef('');
 
   const deferredPlayerSearchQuery = useDeferredValue(playerSearchQuery);
   const normalizedPlayerSearchQuery = deferredPlayerSearchQuery.trim();
@@ -362,6 +366,191 @@ export default function useDraftPageData({ activeView, leagueId }) {
     setDraftCost(String(row.adjustedValue || row.marketValue || 0));
   }
 
+  function getRosterMoveEligibleSlots(player) {
+    const eligibleSlots = getDraftEligibleSlots(toSearchRow(player), rosterSlots);
+    if (Number(rosterSlots?.BN || 0) > 0) {
+      eligibleSlots.push('BN');
+    }
+
+    return Array.from(new Set(eligibleSlots));
+  }
+
+  function getRosterMoveSelectionKey(teamKey, playerId, slot, slotIndex) {
+    return [teamKey, playerId, slot, slotIndex].map((value) => String(value ?? '')).join(':');
+  }
+
+  async function handleSelectRosterMove(teamKey, player, slot, slotIndex) {
+    if (!player?.playerId) return;
+
+    const isSamePlayer =
+      selectedRosterMove?.teamKey === teamKey &&
+      String(selectedRosterMove?.playerId) === String(player.playerId) &&
+      selectedRosterMove?.slot === slot &&
+      selectedRosterMove?.slotIndex === slotIndex;
+
+    if (isSamePlayer) {
+      rosterMoveSelectionKeyRef.current = '';
+      setSelectedRosterMove(null);
+      setRosterMoveError('');
+      return;
+    }
+
+    const selectionKey = getRosterMoveSelectionKey(teamKey, player.playerId, slot, slotIndex);
+    rosterMoveSelectionKeyRef.current = selectionKey;
+
+    setSelectedRosterMove({
+      teamKey,
+      playerId: player.playerId,
+      playerName: player.playerName || String(player.playerId),
+      slot,
+      slotIndex,
+      eligibleSlots: [],
+      isLoadingEligibleSlots: true,
+    });
+    setRosterMoveError('');
+
+    try {
+      const playerResponse = await playerApi.getPlayerById(player.playerId);
+      const fullPlayer = playerResponse?.player || playerResponse;
+      const eligibleSlots = getRosterMoveEligibleSlots(fullPlayer);
+
+      setSelectedRosterMove((current) => {
+        if (
+          current?.teamKey !== teamKey ||
+          String(current?.playerId) !== String(player.playerId) ||
+          current?.slot !== slot ||
+          current?.slotIndex !== slotIndex
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          eligibleSlots,
+          isLoadingEligibleSlots: false,
+        };
+      });
+    } catch (err) {
+      if (rosterMoveSelectionKeyRef.current !== selectionKey) {
+        return;
+      }
+
+      setSelectedRosterMove((current) => {
+        if (
+          current?.teamKey !== teamKey ||
+          String(current?.playerId) !== String(player.playerId) ||
+          current?.slot !== slot ||
+          current?.slotIndex !== slotIndex
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          isLoadingEligibleSlots: false,
+        };
+      });
+      setRosterMoveError(err.message || 'Failed to load eligible slots for that player.');
+    }
+  }
+
+  async function handleMoveRosterPlayer(teamKey, targetSlot) {
+    if (!selectedRosterMove) {
+      return;
+    }
+
+    if (selectedRosterMove.teamKey !== teamKey) {
+      setRosterMoveError('Players can only be moved within their current team.');
+      return;
+    }
+
+    if (selectedRosterMove.slot === targetSlot) {
+      rosterMoveSelectionKeyRef.current = '';
+      setSelectedRosterMove(null);
+      setRosterMoveError('');
+      return;
+    }
+
+    if (selectedRosterMove.isLoadingEligibleSlots) {
+      setRosterMoveError('Eligible slots are still loading for that player.');
+      return;
+    }
+
+    if (!selectedRosterMove.eligibleSlots?.includes(targetSlot)) {
+      setRosterMoveError(
+        `${selectedRosterMove.playerName || 'Selected player'} is not eligible for ${targetSlot}.`
+      );
+      return;
+    }
+
+    const team = teams.find((candidate) => candidate.teamKey === teamKey);
+    const movingPlayer = team?.players?.find(
+      (player) => String(player.playerId) === String(selectedRosterMove.playerId)
+    );
+
+    if (!team || !movingPlayer) {
+      setRosterMoveError('Could not find that player on the selected roster.');
+      return;
+    }
+
+    if (getOpenCountForSlot(team, targetSlot, rosterSlots) <= 0) {
+      setRosterMoveError(`${targetSlot} is already full for ${team.teamName || team.teamKey}.`);
+      return;
+    }
+
+    try {
+      setIsMovingRosterPlayer(true);
+      setRosterMoveError('');
+
+      const latestDraftStateResponse = await leagueApi.getDraftState(leagueId);
+      const latestDraftState = latestDraftStateResponse?.draftState || {};
+      const latestTeams = Array.isArray(latestDraftState.teams) ? latestDraftState.teams : teams;
+      const latestTeam = latestTeams.find((candidate) => candidate.teamKey === teamKey);
+      const latestMovingPlayer = latestTeam?.players?.find(
+        (player) => String(player.playerId) === String(selectedRosterMove.playerId)
+      );
+
+      if (!latestTeam || !latestMovingPlayer) {
+        setRosterMoveError('Could not find that player on the latest roster.');
+        return;
+      }
+
+      if (getOpenCountForSlot(latestTeam, targetSlot, rosterSlots) <= 0) {
+        setRosterMoveError(`${targetSlot} is already full for ${latestTeam.teamName || latestTeam.teamKey}.`);
+        return;
+      }
+
+      const updatedTeams = latestTeams.map((candidateTeam) => {
+        if (candidateTeam.teamKey !== teamKey) return candidateTeam;
+
+        return {
+          ...candidateTeam,
+          players: (candidateTeam.players || []).map((player) => {
+            if (String(player.playerId) !== String(latestMovingPlayer.playerId)) return player;
+
+            return {
+              ...player,
+              assignedSlot: targetSlot,
+              assignedSlots: [targetSlot],
+            };
+          }),
+        };
+      });
+
+      await leagueApi.updateDraftState(leagueId, {
+        teams: updatedTeams,
+      });
+
+      rosterMoveSelectionKeyRef.current = '';
+      setSelectedRosterMove(null);
+      await refreshDraftBoard({ silent: true });
+    } catch (err) {
+      setRosterMoveError(err.message || 'Failed to move player');
+    } finally {
+      setIsMovingRosterPlayer(false);
+    }
+  }
+
  async function handleDraftPlayer() {
   if (!selectedDraftPlayer || !draftTargetTeam) {
     setDraftActionError('Select a player and target team.');
@@ -577,6 +766,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
     selectedDraftPlayer,
     draftActionError,
     handleSelectDraftPlayer,
+    handleSelectRosterMove,
+    handleMoveRosterPlayer,
     handleUndoLastPick,
     isUndoingLastPick,
     draftTargetTeamKey,
@@ -593,8 +784,9 @@ export default function useDraftPageData({ activeView, leagueId }) {
     getPersistedAssignedSlots,
     sortDepthSlots,
     contract,
-    setContract
+    setContract,
+    selectedRosterMove,
+    rosterMoveError,
+    isMovingRosterPlayer,
   };
 }
-
-

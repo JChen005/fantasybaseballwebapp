@@ -4,7 +4,16 @@ import React, { useMemo, useState } from 'react';
 
 const SLOT_ORDER = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL', 'P', 'BN'];
 
-export default function RosterView({ rosterRows, rosterSlots, getPersistedAssignedSlots }) {
+export default function RosterView({
+  rosterRows,
+  rosterSlots,
+  getPersistedAssignedSlots,
+  selectedRosterMove,
+  rosterMoveError,
+  isMovingRosterPlayer,
+  handleSelectRosterMove,
+  handleMoveRosterPlayer,
+}) {
   const [expandedTeams, setExpandedTeams] = useState({});
 
   function toggleTeam(teamKey) {
@@ -20,6 +29,27 @@ export default function RosterView({ rosterRows, rosterSlots, getPersistedAssign
         <h2 className="text-lg font-semibold">Team Roster</h2>
         <p className="text-sm text-slate-600">Current roster state for each team in the league.</p>
       </div>
+
+      {rosterMoveError ? (
+        <p className="mb-4 text-sm text-red-500" role="alert">
+          {rosterMoveError}
+        </p>
+      ) : null}
+
+      {selectedRosterMove ? (
+        <div
+          className="mb-4 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-50"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="font-semibold">{selectedRosterMove.playerName}</span>
+          <span className="text-emerald-100">
+            {selectedRosterMove.isLoadingEligibleSlots
+              ? ' · Loading eligible slots...'
+              : ` · Eligible: ${selectedRosterMove.eligibleSlots?.length ? selectedRosterMove.eligibleSlots.join(', ') : 'none found'}`}
+          </span>
+        </div>
+      ) : null}
 
       {!rosterRows.length ? (
         <p className="text-sm text-slate-600">No team state available yet.</p>
@@ -86,6 +116,10 @@ export default function RosterView({ rosterRows, rosterSlots, getPersistedAssign
                     team={team}
                     rosterSlots={rosterSlots}
                     getPersistedAssignedSlots={getPersistedAssignedSlots}
+                    selectedRosterMove={selectedRosterMove}
+                    isMovingRosterPlayer={isMovingRosterPlayer}
+                    handleSelectRosterMove={handleSelectRosterMove}
+                    handleMoveRosterPlayer={handleMoveRosterPlayer}
                   />
                 )}
               </section>
@@ -110,7 +144,15 @@ function buildRowPlan(rosterSlots = {}) {
   return rows;
 }
 
-function TeamSlotBoard({ team, rosterSlots, getPersistedAssignedSlots }) {
+function TeamSlotBoard({
+  team,
+  rosterSlots,
+  getPersistedAssignedSlots,
+  selectedRosterMove,
+  isMovingRosterPlayer,
+  handleSelectRosterMove,
+  handleMoveRosterPlayer,
+}) {
   const rowPlan = useMemo(() => buildRowPlan(rosterSlots || {}), [rosterSlots]);
 
   const playersBySlot = useMemo(() => {
@@ -130,7 +172,7 @@ function TeamSlotBoard({ team, rosterSlots, getPersistedAssignedSlots }) {
   const rows = useMemo(() => {
     const slotUsage = {};
 
-    return rowPlan.map(({ slot, slotIndex }) => {
+    const plannedRows = rowPlan.map(({ slot, slotIndex }) => {
       const usedIndex = slotUsage[slot] || 0;
       const slotPlayers = playersBySlot[slot] || [];
       const player = slotPlayers[usedIndex] || null;
@@ -143,6 +185,19 @@ function TeamSlotBoard({ team, rosterSlots, getPersistedAssignedSlots }) {
         player,
       };
     });
+
+    const overflowRows = Object.entries(playersBySlot).flatMap(([slot, slotPlayers]) => {
+      const usedCount = slotUsage[slot] || 0;
+
+      return slotPlayers.slice(usedCount).map((player, index) => ({
+        slot,
+        slotIndex: usedCount + index,
+        player,
+        isOverflow: true,
+      }));
+    });
+
+    return [...plannedRows, ...overflowRows];
   }, [rowPlan, playersBySlot]);
 
   if (!rows.length) {
@@ -166,40 +221,95 @@ function TeamSlotBoard({ team, rosterSlots, getPersistedAssignedSlots }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ slot, slotIndex, player }) => (
-            <tr
-              key={`${team.teamKey}-${slot}-${slotIndex}`}
-              className="border-b border-slate-200/70 transition hover:bg-white/5"
-            >
-              <td className="px-3 py-3 font-semibold text-slate-200">{slot}</td>
+          {rows.map(({ slot, slotIndex, player, isOverflow }) => {
+            const isSelected =
+              selectedRosterMove?.teamKey === team.teamKey &&
+              String(selectedRosterMove?.playerId) === String(player?.playerId || '') &&
+              selectedRosterMove?.slot === slot &&
+              selectedRosterMove?.slotIndex === slotIndex;
+            const hasSelectedPlayer = Boolean(selectedRosterMove);
+            const isSameTeam = selectedRosterMove?.teamKey === team.teamKey;
+            const isEligibleTarget = Boolean(selectedRosterMove?.eligibleSlots?.includes(slot));
+            const canMoveHere =
+              hasSelectedPlayer &&
+              isSameTeam &&
+              isEligibleTarget &&
+              !selectedRosterMove?.isLoadingEligibleSlots &&
+              !isMovingRosterPlayer;
+            const emptySlotLabel = !hasSelectedPlayer
+              ? 'Empty'
+              : !isSameTeam
+                ? 'Different team'
+                : selectedRosterMove?.isLoadingEligibleSlots
+                  ? 'Checking...'
+                  : isEligibleTarget
+                    ? 'Move here'
+                    : 'Not eligible';
 
-              {player ? (
-                <>
-                  <td className="px-3 py-3">
-                    <div className="font-medium text-white">
-                      {player.playerName || player.playerId}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">
-                    {player.contract || '—'}
-                  </td>
-                  <td className="px-3 py-3 font-semibold text-slate-200">
-                    ${player.cost || 0}
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">
-                    {player.status || '—'}
-                  </td>
-                </>
-              ) : (
-                <>
-                  <td className="px-3 py-3 text-slate-500">Empty</td>
-                  <td className="px-3 py-3 text-slate-500">—</td>
-                  <td className="px-3 py-3 text-slate-500">—</td>
-                  <td className="px-3 py-3 text-slate-500">—</td>
-                </>
-              )}
-            </tr>
-          ))}
+            return (
+              <tr
+                key={`${team.teamKey}-${slot}-${slotIndex}-${player?.playerId || 'empty'}`}
+                className="border-b border-slate-200/70 transition hover:bg-white/5"
+              >
+                <td className="px-3 py-3 font-semibold text-slate-200">
+                  {slot}
+                  {isOverflow ? (
+                    <span className="ml-2 text-[11px] font-medium text-amber-300">Extra</span>
+                  ) : null}
+                </td>
+
+                {player ? (
+                  <>
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        disabled={isMovingRosterPlayer}
+                        aria-pressed={isSelected}
+                        onClick={() => handleSelectRosterMove(team.teamKey, player, slot, slotIndex)}
+                        className={`rounded px-2 py-1 text-left font-medium text-white transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isSelected ? 'ring-2 ring-emerald-400/80' : ''
+                        }`}
+                      >
+                        {player.playerName || player.playerId}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 text-slate-300">
+                      {player.contract || '—'}
+                    </td>
+                    <td className="px-3 py-3 font-semibold text-slate-200">
+                      ${player.cost || 0}
+                    </td>
+                    <td className="px-3 py-3 text-slate-300">
+                      {player.status || '—'}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        disabled={!canMoveHere}
+                        aria-label={`${emptySlotLabel} ${slot} slot`}
+                        onClick={() => handleMoveRosterPlayer(team.teamKey, slot)}
+                        className={`rounded px-2 py-1 text-left transition disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+                          canMoveHere
+                            ? 'font-medium text-emerald-100 hover:bg-emerald-400/10'
+                            : hasSelectedPlayer && isSameTeam && !isEligibleTarget && !selectedRosterMove?.isLoadingEligibleSlots
+                              ? 'text-slate-600'
+                              : 'text-slate-500 disabled:hover:text-slate-500'
+                        }`}
+                      >
+                        {emptySlotLabel}
+                      </button>
+                    </td>
+                    <td className="px-3 py-3 text-slate-500">—</td>
+                    <td className="px-3 py-3 text-slate-500">—</td>
+                    <td className="px-3 py-3 text-slate-500">—</td>
+                  </>
+                )}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
