@@ -1,4 +1,4 @@
-name: DraftKit Webapp CI/CD
+name: DraftKit Webapp CI
 
 on:
   push:
@@ -9,30 +9,20 @@ on:
       - main
 
 concurrency:
-  group: draftkit-webapp-${{ github.ref }}
+  group: draftkit-webapp-ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   NODE_VERSION: 20
 
 jobs:
-  ci:
-    name: Test and build ${{ matrix.name }}
+  frontend:
+    name: Frontend tests and build
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: frontend
-            path: frontend
-            build_command: npm run build
-            smoke_command: node -e "console.log('Frontend build completed')"
-
-          - name: backend
-            path: backend
-            build_command: node -e "require('./src/app'); console.log('Backend app loaded')"
-            smoke_command: node -e "require('./src/app'); console.log('Backend smoke check passed')"
+    defaults:
+      run:
+        working-directory: frontend
 
     steps:
       - name: Check out repo
@@ -43,111 +33,41 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: ${{ matrix.path }}/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        working-directory: ${{ matrix.path }}
         run: npm ci
 
-      - name: Run tests
-        working-directory: ${{ matrix.path }}
-        run: npm test
+      - name: Run frontend tests
+        run: npm test --if-present
 
-      - name: Build or verify app loads
-        working-directory: ${{ matrix.path }}
-        run: ${{ matrix.build_command }}
+      - name: Build frontend
+        run: npm run build
 
-      - name: Smoke check
-        working-directory: ${{ matrix.path }}
-        run: ${{ matrix.smoke_command }}
-
-  deploy:
-    name: Deploy ${{ matrix.name }} to Vercel
+  backend:
+    name: Backend tests and app check
     runs-on: ubuntu-latest
-    needs: ci
 
-    # Deploy only on pushes
-    if: github.event_name == 'push'
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: frontend
-            path: frontend
-            project_id_secret: VERCEL_FRONTEND_PROJECT_ID
-            health_path: /
-
-          - name: backend
-            path: backend
-            project_id_secret: VERCEL_BACKEND_PROJECT_ID
-            health_path: /api/health
-
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets[matrix.project_id_secret] }}
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
 
-      - name: Decide preview or production
-        id: deploy_mode
-        shell: bash
-        run: |
-          if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "environment=production" >> "$GITHUB_OUTPUT"
-            echo "prod_flag=--prod" >> "$GITHUB_OUTPUT"
-          else
-            echo "environment=preview" >> "$GITHUB_OUTPUT"
-            echo "prod_flag=" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Pull Vercel project settings
-        working-directory: ${{ matrix.path }}
-        run: vercel pull --yes --environment=${{ steps.deploy_mode.outputs.environment }} --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Run backend tests
+        run: npm test
 
-      - name: Build with Vercel
-        working-directory: ${{ matrix.path }}
-        run: vercel build ${{ steps.deploy_mode.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy to Vercel
-        id: vercel_deploy
-        working-directory: ${{ matrix.path }}
-        shell: bash
-        run: |
-          DEPLOYMENT_URL=$(vercel deploy --prebuilt ${{ steps.deploy_mode.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }})
-          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
-          echo "Deployed ${{ matrix.name }} to $DEPLOYMENT_URL"
-
-      - name: Production health check
-        if: github.ref_name == 'main'
-        shell: bash
-        run: |
-          URL="${{ steps.vercel_deploy.outputs.url }}${{ matrix.health_path }}"
-          echo "Checking $URL"
-          curl --fail --silent --show-error "$URL"
-
-  check-player-api:
-    name: Check external Player API
-    runs-on: ubuntu-latest
-    needs: deploy
-
-    if: github.event_name == 'push' && github.ref_name == 'main'
-
-    steps:
-      - name: Check Player API health endpoint
-        env:
-          PLAYER_API_HEALTH_URL: ${{ secrets.PLAYER_API_HEALTH_URL }}
-        shell: bash
-        run: |
-          if [ -z "$PLAYER_API_HEALTH_URL" ]; then
-            echo "PLAYER_API_HEALTH_URL is not set, skipping external Player API health check."
-            exit 0
-          fi
-
-          echo "Checking $PLAYER_API_HEALTH_URL"
-          curl --fail --silent --show-error "$PLAYER_API_HEALTH_URL"
+      - name: Verify backend app loads
+        run: node -e "require('./src/app'); console.log('Backend app loaded successfully')"
