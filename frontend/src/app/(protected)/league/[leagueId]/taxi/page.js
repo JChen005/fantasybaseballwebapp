@@ -6,8 +6,7 @@ import KeeperPlayerRail from 'components/KeeperPlayerRail';
 import { draftkitApi } from 'lib/draftkitApi';
 import { leagueApi } from 'lib/leagueApi';
 import { playerApi } from 'lib/playerApi';
-
-const TAXI_SLOT_COUNT = 8;
+import Link from 'next/link';
 
 export default function Page() {
   const params = useParams();
@@ -65,6 +64,13 @@ export default function Page() {
               </p>
               <h1 className="mt-2 text-2xl font-semibold text-white">Taxi Squad</h1>
             </div>
+
+            <Link
+              href={`/league/${leagueId}/post-draft`}
+              className="rounded-lg border border-emerald-300/70 bg-emerald-400/20 px-4 py-2 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-400/30"
+            >
+              Post-Draft
+            </Link>
           </div>
         </div>
 
@@ -78,6 +84,7 @@ export default function Page() {
           <>
             {error ? <p className="text-sm text-red-600">{error}</p> : null}
             <TaxiBoardTable
+              league={league}
               leagueId={leagueId}
               draftState={draftState}
               selectedPlayer={selectedPlayer}
@@ -92,17 +99,19 @@ export default function Page() {
   );
 }
 
-// Helper functions
+function getTaxiSlotCount(rosterSlots = {}) {
+  return Math.max(0, Number(rosterSlots?.BN || 0));
+}
 
-function buildTaxiRowPlan() {
-  return Array.from({ length: TAXI_SLOT_COUNT }, (_, index) => ({
+function buildTaxiRowPlan(rosterSlots = {}) {
+  return Array.from({ length: getTaxiSlotCount(rosterSlots) }, (_, index) => ({
     slot: 'BN',
     slotIndex: index,
   }));
 }
 
-function createEmptyTaxiRows() {
-  return Array.from({ length: TAXI_SLOT_COUNT }, (_, index) => ({
+function createEmptyTaxiRows(rosterSlots = {}) {
+  return Array.from({ length: getTaxiSlotCount(rosterSlots) }, (_, index) => ({
     slot: 'BN',
     slotIndex: index,
     playerId: null,
@@ -134,11 +143,12 @@ function getTaxiPlayerIds(teams = []) {
   return Array.from(ids);
 }
 
-function draftStateTeamsToTaxiBoard(teams = []) {
+function draftStateTeamsToTaxiBoard(teams = [], rosterSlots = {}) {
   const nextBoard = {};
+  const taxiSlotCount = getTaxiSlotCount(rosterSlots);
 
   for (const team of teams) {
-    const rows = createEmptyTaxiRows();
+    const rows = createEmptyTaxiRows(rosterSlots);
 
     const taxiPlayers = (team.players || []).filter(
       (player) => String(player.status || '').trim().toUpperCase() === 'TAXI'
@@ -147,7 +157,7 @@ function draftStateTeamsToTaxiBoard(teams = []) {
     for (const player of taxiPlayers) {
       const taxiSlot = Number(player.taxiSlot);
 
-      if (!Number.isInteger(taxiSlot) || taxiSlot < 0 || taxiSlot >= TAXI_SLOT_COUNT) {
+      if (!Number.isInteger(taxiSlot) || taxiSlot < 0 || taxiSlot >= taxiSlotCount) {
         continue;
       }
 
@@ -200,6 +210,7 @@ function boardToDraftStateTeams(board, existingTeams = []) {
       if (assignedSlot) {
         accumulator[assignedSlot] = Number(accumulator[assignedSlot] || 0) + 1;
       }
+
       return accumulator;
     }, {});
 
@@ -214,6 +225,7 @@ function boardToDraftStateTeams(board, existingTeams = []) {
 }
 
 function TaxiBoardTable({
+  league,
   leagueId,
   draftState,
   selectedPlayer,
@@ -222,21 +234,24 @@ function TaxiBoardTable({
   onSaved,
 }) {
   const teams = draftState?.teams || [];
+  const rosterSlots = league?.config?.rosterSlots || {};
+  const taxiSlotCount = getTaxiSlotCount(rosterSlots);
+
   const teamOptions = teams.map((team) => ({
     key: team.teamKey,
     label: team.teamName || team.teamKey,
   }));
 
-  const rowPlan = useMemo(() => buildTaxiRowPlan(), []);
-  const [board, setBoard] = useState(() => draftStateTeamsToTaxiBoard(teams));
+  const rowPlan = useMemo(() => buildTaxiRowPlan(rosterSlots), [rosterSlots]);
+  const [board, setBoard] = useState(() => draftStateTeamsToTaxiBoard(teams, rosterSlots));
   const [playerPool, setPlayerPool] = useState({});
   const [selectedTeamKey, setSelectedTeamKey] = useState(teamOptions[0]?.key || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    setBoard(draftStateTeamsToTaxiBoard(teams));
-  }, [teams]);
+    setBoard(draftStateTeamsToTaxiBoard(teams, rosterSlots));
+  }, [teams, rosterSlots]);
 
   useEffect(() => {
     const ids = Object.values(board || {})
@@ -280,13 +295,13 @@ function TaxiBoardTable({
 
   function updateEntry(teamKey, slotIndex, updates) {
     setBoard((current) => {
-      const teamRows = current[teamKey] || createEmptyTaxiRows();
+      const teamRows = current[teamKey] || createEmptyTaxiRows(rosterSlots);
       const existingIndex = teamRows.findIndex((row) => row.slotIndex === slotIndex);
       const existingEntry =
         existingIndex >= 0
           ? teamRows[existingIndex]
           : {
-              slot: 'TAXI',
+              slot: 'BN',
               slotIndex,
               playerId: null,
               playerName: '',
@@ -294,12 +309,19 @@ function TaxiBoardTable({
               taxiSlot: slotIndex,
             };
 
-      const nextEntry = { ...existingEntry, ...updates, taxiSlot: slotIndex };
+      const nextEntry = {
+        ...existingEntry,
+        ...updates,
+        slot: 'BN',
+        status: 'TAXI',
+        taxiSlot: slotIndex,
+      };
+
       const nextTeamRows = [...teamRows];
 
       if (isEntryEmpty(nextEntry)) {
         nextTeamRows[slotIndex] = {
-          slot: 'TAXI',
+          slot: 'BN',
           slotIndex,
           playerId: null,
           playerName: '',
@@ -335,7 +357,6 @@ function TaxiBoardTable({
     updateEntry(teamKey, slotIndex, {
       playerId: Number(selectedPlayer.mlbPlayerId),
       playerName: selectedPlayer.name || selectedPlayer.canonicalName || '',
-      status: 'TAXI',
     });
 
     setSelectedPlayer(null);
@@ -354,7 +375,7 @@ function TaxiBoardTable({
       });
 
       if (response?.draftState) {
-        setBoard(draftStateTeamsToTaxiBoard(response.draftState.teams || []));
+        setBoard(draftStateTeamsToTaxiBoard(response.draftState.teams || [], rosterSlots));
         onSaved?.(response.draftState);
       }
     } catch (saveError) {
@@ -365,7 +386,7 @@ function TaxiBoardTable({
   }
 
   const selectedTeam = teams.find((team) => team.teamKey === selectedTeamKey) || teams[0] || null;
-  const currentRows = board[selectedTeamKey] || createEmptyTaxiRows();
+  const currentRows = board[selectedTeamKey] || createEmptyTaxiRows(rosterSlots);
   const filledCount = currentRows.filter((row) => row?.playerId).length;
 
   return (
@@ -381,15 +402,15 @@ function TaxiBoardTable({
                 {selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}
               </h2>
               <p className="text-sm text-slate-600">
-                Assign up to 8 taxi players for each team.
+                Assign up to {taxiSlotCount} taxi players for each team.
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="rounded-xl border border-slate-700/60 bg-slate-900/45 px-4 py-3 text-sm">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Filled Slots</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Filled BN Slots</p>
                 <p className="mt-1 text-lg font-semibold text-emerald-100">
-                  {filledCount} / {TAXI_SLOT_COUNT}
+                  {filledCount} / {taxiSlotCount}
                 </p>
               </div>
 
@@ -437,96 +458,99 @@ function TaxiBoardTable({
                 {selectedTeam?.teamName || selectedTeam?.teamKey || 'Unknown Team'}
               </h3>
               <p className="text-sm text-slate-500">
-                Click a row to assign the currently selected player from the rail.
+                Click a BN row to assign the currently selected player from the rail.
               </p>
             </div>
             <div className="text-sm text-slate-300">
-              <span className="font-medium text-white">Taxi Slots:</span> {filledCount} filled
+              <span className="font-medium text-white">BN Taxi Slots:</span> {filledCount} filled
               <span className="mx-2 text-slate-600">•</span>
-              <span className="font-medium text-white">{TAXI_SLOT_COUNT - filledCount}</span> open
+              <span className="font-medium text-white">{Math.max(0, taxiSlotCount - filledCount)}</span> open
             </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-3">
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-slate-950">
-              <tr className="border-b border-slate-200 text-left">
-                <th className="w-20 px-3 py-3 font-medium text-white">Slot</th>
-                <th className="min-w-64 px-3 py-3 font-medium text-white">Player</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowPlan.map(({ slotIndex }, rowIndex) => {
-                const entry = findEntry(currentRows, slotIndex) || {
-                  slot: 'TAXI',
-                  slotIndex,
-                  playerId: null,
-                  playerName: '',
-                  status: 'TAXI',
-                  taxiSlot: slotIndex,
-                };
+        {!rowPlan.length ? (
+          <p className="text-sm text-slate-600">No BN slots are configured for this league.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-3">
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 bg-slate-950">
+                <tr className="border-b border-slate-200 text-left">
+                  <th className="w-20 px-3 py-3 font-medium text-white">Slot</th>
+                  <th className="min-w-64 px-3 py-3 font-medium text-white">Player</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowPlan.map(({ slotIndex }, rowIndex) => {
+                  const entry = findEntry(currentRows, slotIndex) || {
+                    slot: 'BN',
+                    slotIndex,
+                    playerId: null,
+                    playerName: '',
+                    status: 'TAXI',
+                    taxiSlot: slotIndex,
+                  };
 
-                const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
+                  const player = entry.playerId ? playerPool[Number(entry.playerId)] : null;
 
-                return (
-                  <tr
-                    key={`${selectedTeamKey}-taxi-${slotIndex}-${rowIndex}`}
-                    className="border-b border-slate-200/70 transition hover:bg-white/5"
-                  >
-                    <td className="w-20 px-3 py-3 align-middle text-sm font-semibold text-slate-200">
-                      T{slotIndex + 1}
-                    </td>
-                    <td className="min-w-64 px-3 py-3">
-                      <button
-                        type="button"
-                        onClick={() => handlePlayerClick(selectedTeamKey, slotIndex)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left transition hover:bg-white/5"
-                      >
-                        {entry.playerId ? (
-                          <div className="flex min-w-0 items-center gap-2">
-                            {player?.headshotUrl ? (
-                              <img
-                                src={player.headshotUrl}
-                                alt={entry.playerName}
-                                className="h-10 w-10 rounded-full border border-slate-200 object-cover"
-                              />
-                            ) : null}
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-white">
-                                {entry.playerName}
+                  return (
+                    <tr
+                      key={`${selectedTeamKey}-taxi-${slotIndex}-${rowIndex}`}
+                      className="border-b border-slate-200/70 transition hover:bg-white/5"
+                    >
+                      <td className="w-20 px-3 py-3 align-middle text-sm font-semibold text-slate-200">
+                        BN {slotIndex + 1}
+                      </td>
+                      <td className="min-w-64 px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => handlePlayerClick(selectedTeamKey, slotIndex)}
+                          className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1 text-left transition hover:bg-white/5"
+                        >
+                          {entry.playerId ? (
+                            <div className="flex min-w-0 items-center gap-2">
+                              {player?.headshotUrl ? (
+                                <img
+                                  src={player.headshotUrl}
+                                  alt={entry.playerName}
+                                  className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+                                />
+                              ) : null}
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium text-white">
+                                  {entry.playerName}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-slate-500">
-                            Click to assign selected player
-                          </span>
-                        )}
+                          ) : (
+                            <span className="text-sm text-slate-500">
+                              Click to assign selected player
+                            </span>
+                          )}
 
-                        {entry.playerId ? (
-                          <span
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              updateEntry(selectedTeamKey, slotIndex, {
-                                playerId: null,
-                                playerName: '',
-                                status: 'TAXI',
-                              });
-                            }}
-                            className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
-                          >
-                            Clear
-                          </span>
-                        ) : null}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          {entry.playerId ? (
+                            <span
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateEntry(selectedTeamKey, slotIndex, {
+                                  playerId: null,
+                                  playerName: '',
+                                });
+                              }}
+                              className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/10 hover:text-red-200"
+                            >
+                              Clear
+                            </span>
+                          ) : null}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
