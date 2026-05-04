@@ -13,6 +13,20 @@ async function createLeagueForUser(userId, name) {
   });
 }
 
+async function createLeagueWithConfigForUser(userId, payload = {}) {
+  const league = await createLeagueForUser(userId, payload.name);
+
+  if (payload.config) {
+    league.config = {
+      ...league.config?.toObject?.(),
+      ...payload.config,
+    };
+    await league.save();
+  }
+
+  return league;
+}
+
 function getConfiguredTeams(league) {
   const configuredTeams = Array.isArray(league.config?.teams) ? league.config.teams : [];
   if (configuredTeams.length) {
@@ -254,6 +268,7 @@ module.exports = {
   listLeaguesForUser,
   getLeagueForUser,
   createLeagueForUser,
+  createLeagueWithConfigForUser,
   deleteLeagueForUser,
   updateLeagueConfigForUser,
   getOrCreateDraftStateForLeague,

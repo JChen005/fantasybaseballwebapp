@@ -27,6 +27,7 @@ export function normalizeLeagueToForm(league) {
   return {
     name: league?.name || 'My League',
     config: {
+      season: Number(config.season || 2026),
       leagueType: config.leagueType || 'MIXED',
       budget,
       scoring: config.scoring || 'CATEGORY',

@@ -7,6 +7,7 @@ import { draftkitApi } from 'lib/draftkitApi';
 export default function DashboardPage() {
   const [leagues, setLeagues] = useState([]);
   const [name, setName] = useState('My League');
+  const [season, setSeason] = useState(2026);
   const [error, setError] = useState('');
   const [draftkitHealth, setDraftkitHealth] = useState('checking...');
   const [creatingLeague, setCreatingLeague] = useState(false);
@@ -60,7 +61,7 @@ export default function DashboardPage() {
 
     try {
       setCreatingLeague(true);
-      await draftkitApi.createLeague({ name: nextName });
+      await draftkitApi.createLeague({ name: nextName, season });
       await loadLeagues();
       setName('My League');
     } catch (err) {
@@ -103,18 +104,35 @@ export default function DashboardPage() {
 
       <div className="panel">
         <h2 className="mb-2 text-lg font-semibold">Create League</h2>
-        <form className="flex flex-wrap gap-2" onSubmit={createLeague}>
-          <label htmlFor="leagueName" className="sr-only">
-            League name
-          </label>
-          <input
-            id="leagueName"
-            className="input max-w-xs"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={80}
-            required
-          />
+        <form className="flex flex-wrap items-center gap-2" onSubmit={createLeague}>
+          <div className="w-full max-w-xs">
+            <label htmlFor="leagueName" className="sr-only">
+              League name
+            </label>
+            <input
+              id="leagueName"
+              className="input"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={80}
+              required
+            />
+          </div>
+          <div className="w-28">
+            <label htmlFor="leagueSeason" className="sr-only">
+              Draft year
+            </label>
+            <input
+              id="leagueSeason"
+              className="input"
+              type="number"
+              min="1901"
+              max="2100"
+              value={season}
+              onChange={(event) => setSeason(Number(event.target.value) || 2026)}
+              required
+            />
+          </div>
           <button className="btn" type="submit" disabled={creatingLeague}>
             {creatingLeague ? 'Creating...' : 'Create'}
           </button>
@@ -133,7 +151,10 @@ export default function DashboardPage() {
             {leagues.map((league) => (
               <li key={league._id} className="rounded border border-slate-200 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">{league.name}</p>
+                  <div>
+                    <p className="font-medium">{league.name}</p>
+                    <p className="text-xs text-slate-500">Draft year {league.config?.season || 2026}</p>
+                  </div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2 text-sm">
                   <Link className="btn btn-secondary" href={`/league/${league._id}/config`}>

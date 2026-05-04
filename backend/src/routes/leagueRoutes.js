@@ -2,6 +2,7 @@ const express = require('express');
 
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { AppError } = require('../utils/appError');
 const {
   validateObjectId,
   validateLeagueName,
@@ -11,7 +12,7 @@ const {
 const {
   listLeaguesForUser,
   getLeagueForUser,
-  createLeagueForUser,
+  createLeagueWithConfigForUser,
   deleteLeagueForUser,
   updateLeagueConfigForUser,
   getOrCreateDraftStateForLeague,
@@ -44,7 +45,16 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const name = validateLeagueName(req.body?.name);
-    const league = await createLeagueForUser(req.userId, name);
+    const season = req.body?.season == null || req.body.season === ''
+      ? undefined
+      : Number(req.body.season);
+    if (season !== undefined && (!Number.isInteger(season) || season < 1901 || season > 2100)) {
+      throw new AppError('season must be a valid year', 400);
+    }
+    const league = await createLeagueWithConfigForUser(req.userId, {
+      name,
+      config: season ? { season } : undefined,
+    });
     res.status(201).json({ league });
   })
 );

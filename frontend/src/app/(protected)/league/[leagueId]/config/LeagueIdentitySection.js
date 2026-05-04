@@ -28,6 +28,18 @@ export default function LeagueIdentitySection({
           />
         </label>
 
+        <label className="flex flex-col gap-2 text-sm">
+          <span className="font-semibold text-white">Draft year</span>
+          <input
+            className="input h-12 rounded-2xl border-white/10 bg-slate-950/50 px-4 font-mono"
+            type="number"
+            min="1901"
+            max="2100"
+            value={form.config.season}
+            onChange={(event) => updateConfig({ season: Number(event.target.value) || 2026 })}
+          />
+        </label>
+
         <ConfigSelect
           label="League type"
           value={form.config.leagueType}

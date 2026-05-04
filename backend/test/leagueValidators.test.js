@@ -26,6 +26,7 @@ describe('league config validators', () => {
       name: 'Home League',
       config: {
         leagueType: 'MIXED',
+        season: 2026,
         scoring: 'CATEGORY',
         budget: 260,
         teamCount: 2,

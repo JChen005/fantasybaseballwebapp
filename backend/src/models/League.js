@@ -29,6 +29,11 @@ const leagueSchema = new mongoose.Schema(
       notes: String,
     }],
     config: {
+      season: {
+        type: Number,
+        default: 2026,
+        min: 1901,
+      },
       leagueType: {
         type: String,
         enum: ['AL', 'NL', 'MIXED'],

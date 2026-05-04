@@ -49,6 +49,11 @@ function validateLeagueConfigPayload(payload = {}) {
     throw new AppError('config.scoring is invalid', 400);
   }
 
+  const season = Number(config.season || 2026);
+  if (!Number.isInteger(season) || season < 1901 || season > 2100) {
+    throw new AppError('config.season must be a valid year', 400);
+  }
+
   const budget = Number(config.budget);
   if (!Number.isFinite(budget) || budget <= 0) {
     throw new AppError('config.budget must be a positive number', 400);
@@ -107,6 +112,7 @@ function validateLeagueConfigPayload(payload = {}) {
   }
 
   normalized.config = {
+    season,
     leagueType,
     budget,
     scoring,
