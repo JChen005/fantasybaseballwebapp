@@ -45,10 +45,18 @@ export default function DraftBoardView({
   handleDraftPlayer,
   isSavingDraftAction,
   contract,
-  setContract
+  setContract,
+  handleSelectCustomDraftPlayer,
+  handleCancelCustomDraftPlayer,
 }) {
   const [expandedRows, setExpandedRows] = useState({});
   const [playerNotes, setPlayerNotes] = useState({});
+  const [showCustomPlayerForm, setShowCustomPlayerForm] = useState(false);
+  const [customPlayerForm, setCustomPlayerForm] = useState({
+    name: '',
+    team: 'CUSTOM',
+    position: 'UTIL',
+  });
 
   const savedNotesByPlayerId = useMemo(() => {
     return (league?.playerNotes || []).reduce((acc, note) => {
@@ -78,6 +86,31 @@ export default function DraftBoardView({
       id: Number(row.id),
       notes: note,
     });
+  }
+
+  function handleCustomPlayerChange(field, value) {
+    setCustomPlayerForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function handleUseCustomPlayer() {
+    const name = customPlayerForm.name.trim();
+    const position = customPlayerForm.position
+      .split(',')
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean)
+      .join(', ');
+
+    if (!name || !position) return;
+
+    handleSelectCustomDraftPlayer({
+      name,
+      team: customPlayerForm.team.trim().toUpperCase() || 'CUSTOM',
+      position,
+    });
+    setShowCustomPlayerForm(false);
   }
 
   return (
@@ -228,6 +261,57 @@ export default function DraftBoardView({
             </div>
             <button
               type="button"
+              className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5"
+              onClick={() => setShowCustomPlayerForm((current) => !current)}
+            >
+              {showCustomPlayerForm ? 'Hide Custom Player' : 'Draft Custom Player'}
+            </button>
+            {showCustomPlayerForm ? (
+              <div className="space-y-3 rounded-xl border border-slate-700/60 bg-slate-900/45 p-4">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium text-white">Player Name</span>
+                  <input
+                    className="input"
+                    value={customPlayerForm.name}
+                    onChange={(event) => handleCustomPlayerChange('name', event.target.value)}
+                    placeholder="Custom player"
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-white">Team</span>
+                    <input
+                      className="input"
+                      value={customPlayerForm.team}
+                      onChange={(event) => handleCustomPlayerChange('team', event.target.value)}
+                      placeholder="CUSTOM"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="font-medium text-white">Eligible Roles</span>
+                    <input
+                      className="input"
+                      value={customPlayerForm.position}
+                      onChange={(event) => handleCustomPlayerChange('position', event.target.value)}
+                      placeholder="C, 1B, 2B, 3B, SS, OF, P, UTIL"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Custom players are saved to the draft, but they are not valued by the Player API.
+                </p>
+                <button
+                  type="button"
+                  className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleUseCustomPlayer}
+                  disabled={!customPlayerForm.name.trim() || !customPlayerForm.position.trim()}
+                >
+                  Use Custom Player
+                </button>
+              </div>
+            ) : null}
+            <button
+              type="button"
               className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={handleUndoLastPick}
               disabled={isUndoingLastPick || !picks.length}
@@ -251,6 +335,9 @@ export default function DraftBoardView({
                   <p className="text-sm text-slate-500">
                     {selectedDraftPlayer.team || 'No Team'} · {selectedDraftPlayer.position}
                   </p>
+                  {selectedDraftPlayer.isCustomPlayer ? (
+                    <p className="mt-1 text-xs text-amber-200">Custom player · no API valuation</p>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -332,10 +419,10 @@ export default function DraftBoardView({
               <button
                 type="button"
                 className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleUndoLastPick}
-                disabled={isUndoingLastPick || !picks.length}
+                onClick={selectedDraftPlayer.isCustomPlayer ? handleCancelCustomDraftPlayer : handleUndoLastPick}
+                disabled={!selectedDraftPlayer.isCustomPlayer && (isUndoingLastPick || !picks.length)}
               >
-                {isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
+                {selectedDraftPlayer.isCustomPlayer ? 'Cancel Custom Player' : isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
               </button>
             </div>
           </div>

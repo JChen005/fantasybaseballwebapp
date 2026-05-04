@@ -61,6 +61,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [draftActionError, setDraftActionError] = useState(""); // draft/undo action error message
   const [isSavingDraftAction, setIsSavingDraftAction] = useState(false); // draft save state
   const [isUndoingLastPick, setIsUndoingLastPick] = useState(false); // undo last pick state
+  const [customDraftPlayer, setCustomDraftPlayer] = useState(null); // manually entered unvalued draft player
 
   // Player lookup tab state
   const [playerSearchQuery, setPlayerSearchQuery] = useState(""); // lookup tab search text
@@ -404,6 +405,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
   console.log("filteredDraftRows", filteredDraftRows);
 
   const selectedDraftPlayer =
+    customDraftPlayer ||
     filteredDraftRows.find((row) => row.id === selectedDraftPlayerId) ||
     rows.find((row) => row.id === selectedDraftPlayerId) ||
     null;
@@ -448,9 +450,34 @@ export default function useDraftPageData({ activeView, leagueId }) {
   }, [draftEligibleSlots, draftTargetTeam, rosterSlots, selectedDraftPlayer]);
 
   function handleSelectDraftPlayer(row) {
+    setCustomDraftPlayer(null);
     setSelectedDraftPlayerId(row.id);
     setDraftActionError("");
     setDraftCost(String(row.adjustedValue || row.marketValue || 0));
+  }
+
+  function handleSelectCustomDraftPlayer(player) {
+    setCustomDraftPlayer({
+      ...player,
+      id: String(Date.now()),
+      team: player.team || "CUSTOM",
+      adjustedValue: null,
+      marketValue: null,
+      fillsNeed: false,
+      neededSlots: [],
+      isCustomPlayer: true,
+    });
+    setSelectedDraftPlayerId("");
+    setDraftActionError("");
+    setDraftCost("");
+  }
+
+  function handleCancelCustomDraftPlayer() {
+    setCustomDraftPlayer(null);
+    setSelectedDraftPlayerId("");
+    setDraftAssignedSlot("");
+    setDraftCost("");
+    setDraftActionError("");
   }
 
   function getRosterMoveEligibleSlots(player) {
@@ -669,7 +696,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
       return;
     }
 
-    if (draftedPlayerIds.has(String(selectedDraftPlayer.id))) {
+    if (!selectedDraftPlayer.isCustomPlayer && draftedPlayerIds.has(String(selectedDraftPlayer.id))) {
       setDraftActionError(
         `${selectedDraftPlayer.name} has already been drafted.`,
       );
@@ -701,11 +728,14 @@ export default function useDraftPageData({ activeView, leagueId }) {
       setDraftActionError("");
 
       const selectedContract = contract || getDraftContract("DRAFTED");
+      const selectedPlayerId = selectedDraftPlayer.isCustomPlayer
+        ? Number(selectedDraftPlayer.id)
+        : selectedDraftPlayer.id;
 
       const updatedTeams = teams.map((team) => {
         const existingPlayers = Array.isArray(team.players)
           ? team.players.filter(
-              (player) => String(player.playerId) !== selectedDraftPlayer.id,
+              (player) => String(player.playerId) !== String(selectedPlayerId),
             )
           : [];
         const filledSlots = { ...(team.filledSlots || {}) };
@@ -727,7 +757,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
         const nextPlayers = [
           ...existingPlayers,
           {
-            playerId: selectedDraftPlayer.id,
+            playerId: selectedPlayerId,
             playerName: selectedDraftPlayer.name,
             cost: numericCost,
             status: "DRAFTED",
@@ -763,7 +793,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
             league?.config?.teamCount || teams.length || 1,
           ),
           teamKey: draftTargetTeam.teamKey,
-          playerId: selectedDraftPlayer.id,
+          playerId: String(selectedPlayerId),
           playerName: selectedDraftPlayer.name,
           cost: numericCost,
           status: "DRAFTED",
@@ -781,6 +811,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
       });
 
       setSelectedDraftPlayerId("");
+      setCustomDraftPlayer(null);
       setDraftAssignedSlot("");
       setDraftCost("");
       await refreshDraftBoard({ silent: true });
@@ -910,6 +941,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
     selectedDraftPlayer,
     draftActionError,
     handleSelectDraftPlayer,
+    handleSelectCustomDraftPlayer,
+    handleCancelCustomDraftPlayer,
     handleSelectRosterMove,
     handleMoveRosterPlayer,
     handleUndoLastPick,
@@ -932,5 +965,6 @@ export default function useDraftPageData({ activeView, leagueId }) {
     selectedRosterMove,
     rosterMoveError,
     isMovingRosterPlayer,
+    customDraftPlayer,
   };
 }
