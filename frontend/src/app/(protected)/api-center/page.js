@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   KeyRound,
   LoaderCircle,
-  Radar,
   RefreshCw,
   Send,
 } from 'lucide-react';
@@ -69,7 +68,7 @@ export default function ApiCenterPage() {
   const [playerQuery, setPlayerQuery] = useState('');
   const [transactionDetail, setTransactionDetail] = useState('');
   const [creatingTransaction, setCreatingTransaction] = useState(false);
-  const [transactionResult, setTransactionResult] = useState(null);
+  const [transactionMessage, setTransactionMessage] = useState('');
 
   const [loadingStageId, setLoadingStageId] = useState('');
 
@@ -139,15 +138,14 @@ export default function ApiCenterPage() {
   async function handleCreateTransaction(event) {
     event.preventDefault();
     resetNotices();
-    setTransactionResult(null);
+    setTransactionMessage('');
     setCreatingTransaction(true);
     try {
       const data = await draftkitApi.createPlayerTransaction({
         playerQuery,
         detail: transactionDetail,
       });
-      setTransactionResult(data);
-      setSuccess(`Added an update for ${data?.resolvedPlayer?.name || 'that player'}.`);
+      setTransactionMessage(`Posted update for ${data?.resolvedPlayer?.name || 'that player'}.`);
     } catch (err) {
       setError(err.message || 'Could not create that player update');
     } finally {
@@ -294,19 +292,12 @@ export default function ApiCenterPage() {
                   <Send className="h-4 w-4" />
                   Post Update
                 </PrimaryActionButton>
+                {transactionMessage ? (
+                  <p className="text-sm font-medium text-emerald-100" role="status" aria-live="polite">
+                    {transactionMessage}
+                  </p>
+                ) : null}
               </div>
-
-              {transactionResult ? (
-                <div className="rounded-[1.1rem] border border-cyan-300/12 bg-cyan-300/[0.04] p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-white">{transactionResult?.resolvedPlayer?.name}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-400">{transactionResult?.event?.detail}</p>
-                    </div>
-                    <Radar className="mt-1 h-4 w-4 text-cyan-200" />
-                  </div>
-                </div>
-              ) : null}
             </div>
           </form>
         </div>

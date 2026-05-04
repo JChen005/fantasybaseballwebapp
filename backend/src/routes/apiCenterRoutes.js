@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { callPlayerApi } = require('../services/playerApiClient');
 const { createDemoLeagueForStage, STAGE_CONFIG } = require('../services/apiCenterDemoService');
+const { recordMockTransactionNotification } = require('../services/mockNotificationService');
 const { AppError } = require('../utils/appError');
 
 const router = express.Router();
@@ -172,13 +173,20 @@ router.post(
       retryOnStatuses: [429],
     });
 
+    const resolvedPlayer = {
+      id: player._id,
+      mlbPlayerId: player.mlbPlayerId,
+      name: player.name,
+    };
+    const notification = recordMockTransactionNotification({
+      event: result.data?.event,
+      resolvedPlayer,
+    });
+
     res.status(result.status).json({
       ...result.data,
-      resolvedPlayer: {
-        id: player._id,
-        mlbPlayerId: player.mlbPlayerId,
-        name: player.name,
-      },
+      resolvedPlayer,
+      notification,
     });
   })
 );

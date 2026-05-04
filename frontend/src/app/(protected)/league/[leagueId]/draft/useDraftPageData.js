@@ -50,6 +50,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [draftSearchRows, setDraftSearchRows] = useState([]); // searched players rows
   const [draftSearchError, setDraftSearchError] = useState(""); // draft search error message
   const [isLoadingDraftSearch, setIsLoadingDraftSearch] = useState(false); // draft search loading state
+  const [draftNotification, setDraftNotification] = useState(null); // latest mock player update notification
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState([]); // dismissed notification ids
 
   // Draft action form state for selecting and saving a new pick
   const [selectedDraftPlayerId, setSelectedDraftPlayerId] = useState(""); // selected player to draft
@@ -244,6 +246,54 @@ export default function useDraftPageData({ activeView, leagueId }) {
       ),
     [teams],
   );
+
+  useEffect(() => {
+    if (activeView !== "draft") return undefined;
+
+    let cancelled = false;
+    let latestSeenTimestamp = "";
+
+    async function loadRecentNotifications() {
+      try {
+        const response = await playerApi.getRecentTransactionNotifications({
+          since: latestSeenTimestamp,
+        });
+        if (cancelled) return;
+
+        const notifications = Array.isArray(response?.notifications)
+          ? response.notifications
+          : [];
+        const nextNotification = notifications.find(
+          (notification) => !dismissedNotificationIds.includes(notification.id),
+        );
+
+        if (notifications[0]?.timestamp) {
+          latestSeenTimestamp = notifications[0].timestamp;
+        }
+
+        if (nextNotification) {
+          setDraftNotification(nextNotification);
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    const intervalId = setInterval(loadRecentNotifications, 15_000);
+    loadRecentNotifications();
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+    };
+  }, [activeView, dismissedNotificationIds]);
+
+  function dismissDraftNotification() {
+    if (draftNotification?.id) {
+      setDismissedNotificationIds((current) => [...current, draftNotification.id]);
+    }
+    setDraftNotification(null);
+  }
 
   const rosterRows = useMemo(
     () =>
@@ -1027,6 +1077,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
     filteredDraftRows,
     draftSearchError,
     isLoadingDraftSearch,
+    draftNotification,
+    dismissDraftNotification,
     draftTeamFilter,
     setDraftTeamFilter,
     draftRoleFilter,

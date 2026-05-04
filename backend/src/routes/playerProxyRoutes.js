@@ -4,6 +4,7 @@ const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { callPlayerApi } = require('../services/playerApiClient');
 const { enrichPlayerForFantasyRules, parseJsonQueryParam } = require('../services/fantasyRules');
+const { listRecentMockTransactionNotifications } = require('../services/mockNotificationService');
 const {
   parseLimit,
   parseLeagueType,
@@ -158,6 +159,17 @@ router.post(
       body: req.body || {},
     });
     res.status(result.status).json(enrichPlayersResponse(result.data, { rosterSlots, filledSlots }));
+  })
+);
+
+router.get(
+  '/transactions/recent',
+  asyncHandler(async (req, res) => {
+    res.json({
+      notifications: listRecentMockTransactionNotifications({
+        since: req.query.since,
+      }),
+    });
   })
 );
 

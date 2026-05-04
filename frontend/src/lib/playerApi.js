@@ -43,6 +43,8 @@ export const playerApi = {
       })}`
     ),
   getPlayerValuations: (payload) => post('/api/player/valuations/players', payload),
+  getRecentTransactionNotifications: ({ since } = {}) =>
+    get(`/api/player/transactions/recent?${buildQuery({ since })}`),
   getTeamDepthChart: ({ teamId, season } = {}) =>
     get(`/api/player/teams/${teamId}/depth-chart?${buildQuery({ season })}`),
   getPlayersByName: (name = '', { leagueType = null, limit = 25 } = {}) =>
