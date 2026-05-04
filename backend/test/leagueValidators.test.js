@@ -113,6 +113,28 @@ describe('draft state validators', () => {
           status: 'drafted',
         },
       ],
+      redoStack: [
+        {
+          pick: {
+            pickNumber: 2,
+            round: 1,
+            teamKey: 'team-1',
+            playerId: '999',
+            playerName: 'Redo Player',
+            cost: '12',
+            status: 'drafted',
+          },
+          player: {
+            playerId: '999',
+            playerName: 'Redo Player',
+            cost: '12',
+            status: 'drafted',
+            assignedSlot: 'UTIL',
+            assignedSlots: ['UTIL'],
+            contract: 'f2',
+          },
+        },
+      ],
     });
 
     expect(payload).toMatchObject({
@@ -163,6 +185,29 @@ describe('draft state validators', () => {
           playerName: 'Drafted Outfielder',
           cost: 42,
           status: 'DRAFTED',
+        },
+      ],
+      redoStack: [
+        {
+          pick: {
+            pickNumber: 2,
+            round: 1,
+            teamKey: 'team-1',
+            playerId: '999',
+            playerName: 'Redo Player',
+            cost: 12,
+            status: 'DRAFTED',
+          },
+          player: {
+            playerId: 999,
+            playerName: 'Redo Player',
+            cost: 12,
+            status: 'DRAFTED',
+            countsAgainstBudget: true,
+            assignedSlot: 'UTIL',
+            assignedSlots: ['UTIL'],
+            contract: 'F2',
+          },
         },
       ],
     });

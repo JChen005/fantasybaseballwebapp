@@ -1,4 +1,3 @@
-import { statsBuffer } from 'framer-motion';
 import { DRAFT_VIEW_TABS } from './draftPageConstants';
 
 export function resolveDraftView(rawView) {
@@ -221,5 +220,4 @@ export function getDraftPickRound(currentPickNumber, teamCount) {
   const teams = Math.max(1, Number(teamCount) || 1);
   return Math.floor((Math.max(1, Number(currentPickNumber) || 1) - 1) / teams) + 1;
 }
-
 

@@ -109,7 +109,7 @@ function assertUniquePlayersAcrossTeams(teams = []) {
   }
 }
 
-function deriveFilledSlotsFromPlayers(players = [], rosterSlots = {}, { strict = false } = {}) {
+function deriveFilledSlotsFromPlayers(players = [], rosterSlots = {}) {
   const derived = {};
 
   for (const slot of Object.keys(rosterSlots || {})) {
@@ -123,9 +123,6 @@ function deriveFilledSlotsFromPlayers(players = [], rosterSlots = {}, { strict =
       }
 
       derived[slot] += 1;
-      if (strict && derived[slot] > (Number(rosterSlots[slot]) || 0)) {
-        throw new AppError(`Assigned slot ${slot} exceeds configured roster capacity`, 400);
-      }
       derived[slot] = Math.min(derived[slot], Number(rosterSlots[slot]) || 0);
     }
   }
@@ -196,6 +193,7 @@ async function getOrCreateDraftStateForLeague(leagueId, userId) {
       currentPickNumber: 1,
       teams: buildDefaultTeamState(league),
       picks: [],
+      redoStack: [],
     });
   } else {
     reconcileDraftStateWithLeague(draftState, league);
@@ -232,6 +230,9 @@ async function updateDraftStateForLeague(leagueId, userId, payload) {
   if (payload.picks !== undefined) {
     // Picks are optional history only; current roster state remains canonical on draftState.teams.
     draftState.picks = payload.picks;
+  }
+  if (payload.redoStack !== undefined) {
+    draftState.redoStack = payload.redoStack;
   }
 
   reconcileDraftStateWithLeague(draftState, league);

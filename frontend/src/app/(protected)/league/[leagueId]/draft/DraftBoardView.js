@@ -30,6 +30,9 @@ export default function DraftBoardView({
   picks,
   handleUndoLastPick,
   isUndoingLastPick,
+  handleRedoLastPick,
+  isRedoingLastPick,
+  redoStack,
   draftTargetTeamKey,
   setDraftTargetTeamKey,
   teams,
@@ -117,8 +120,26 @@ export default function DraftBoardView({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
       <div className="panel">
         <div className="mb-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Draft Board</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleUndoLastPick}
+                disabled={isUndoingLastPick || isRedoingLastPick || !picks.length}
+              >
+                {isUndoingLastPick ? 'Undoing...' : 'Undo'}
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleRedoLastPick}
+                disabled={isUndoingLastPick || isRedoingLastPick || !redoStack.length}
+              >
+                {isRedoingLastPick ? 'Redoing...' : 'Redo'}
+              </button>
+            </div>
           </div>
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium text-white">Search</span>
@@ -310,14 +331,6 @@ export default function DraftBoardView({
                 </button>
               </div>
             ) : null}
-            <button
-              type="button"
-              className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={handleUndoLastPick}
-              disabled={isUndoingLastPick || !picks.length}
-            >
-              {isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
-            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -416,14 +429,15 @@ export default function DraftBoardView({
               >
                 {isSavingDraftAction ? 'Saving...' : 'Draft Player'}
               </button>
-              <button
-                type="button"
-                className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={selectedDraftPlayer.isCustomPlayer ? handleCancelCustomDraftPlayer : handleUndoLastPick}
-                disabled={!selectedDraftPlayer.isCustomPlayer && (isUndoingLastPick || !picks.length)}
-              >
-                {selectedDraftPlayer.isCustomPlayer ? 'Cancel Custom Player' : isUndoingLastPick ? 'Undoing...' : 'Undo Last Pick'}
-              </button>
+              {selectedDraftPlayer.isCustomPlayer ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5"
+                  onClick={handleCancelCustomDraftPlayer}
+                >
+                  Cancel Custom Player
+                </button>
+              ) : null}
             </div>
           </div>
         )}

@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const { AppError } = require('../utils/appError');
 
+const DRAFT_STATUSES = ['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'];
+
 function validateObjectId(id, fieldName = 'id') {
   if (!mongoose.isValidObjectId(id)) {
     throw new AppError(`Invalid ${fieldName}`, 400);
@@ -126,6 +128,103 @@ function validateLeagueConfigPayload(payload = {}) {
   return normalized;
 }
 
+function normalizeDraftPick(pick, path) {
+  if (!pick || typeof pick !== 'object' || Array.isArray(pick)) {
+    throw new AppError(`${path} must be an object`, 400);
+  }
+
+  const pickNumber = Number(pick.pickNumber);
+  const round = Number(pick.round ?? 1);
+  const cost = Number(pick.cost ?? 0);
+  const teamKey = String(pick.teamKey || '').trim();
+  const playerId = String(pick.playerId || '').trim();
+  const status = String(pick.status || 'DRAFTED').trim().toUpperCase();
+
+  if (!Number.isInteger(pickNumber) || pickNumber <= 0) {
+    throw new AppError(`${path}.pickNumber must be a positive integer`, 400);
+  }
+  if (!Number.isInteger(round) || round < 0 || (round === 0 && status !== 'KEEPER')) {
+    throw new AppError(`${path}.round must be 0 for keepers or a positive integer`, 400);
+  }
+  if (!teamKey || !playerId) {
+    throw new AppError(`${path} must include teamKey and playerId`, 400);
+  }
+  if (!Number.isFinite(cost) || cost < 0) {
+    throw new AppError(`${path}.cost must be non-negative`, 400);
+  }
+  if (!DRAFT_STATUSES.includes(status)) {
+    throw new AppError(`${path}.status is invalid`, 400);
+  }
+
+  return {
+    pickNumber,
+    round,
+    teamKey,
+    playerId,
+    playerName: String(pick.playerName || '').trim(),
+    cost,
+    status,
+    timestamp: pick.timestamp ? new Date(pick.timestamp) : undefined,
+  };
+}
+
+function normalizeDraftPlayer(player, path, { includeTaxiSlot = false } = {}) {
+  if (!player || typeof player !== 'object' || Array.isArray(player)) {
+    throw new AppError(`${path} must be an object`, 400);
+  }
+
+  const playerId = String(player.playerId || '').trim();
+  const status = String(player.status || '').trim().toUpperCase();
+  if (!playerId) {
+    throw new AppError(`${path}.playerId is required`, 400);
+  }
+  if (!DRAFT_STATUSES.includes(status)) {
+    throw new AppError(`${path}.status is invalid`, 400);
+  }
+
+  const cost = Number(player.cost ?? 0);
+  if (!Number.isFinite(cost) || cost < 0) {
+    throw new AppError(`${path}.cost must be non-negative`, 400);
+  }
+
+  const assignedSlot = String(
+    player.assignedSlot ||
+      (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') ||
+      ''
+  )
+    .trim()
+    .toUpperCase();
+
+  const normalized = {
+    playerId: Number(playerId),
+    playerName: String(player.playerName || '').trim(),
+    cost,
+    status,
+    countsAgainstBudget:
+      assignedSlot !== 'BN' && status !== 'MINOR' && status !== 'TAXI',
+    assignedSlot,
+    assignedSlots: Array.isArray(player.assignedSlots)
+      ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
+      : assignedSlot
+        ? [assignedSlot]
+        : [],
+    contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
+  };
+
+  if (includeTaxiSlot) {
+    let taxiSlot;
+    if (player.taxiSlot != null && player.taxiSlot !== '') {
+      taxiSlot = Number(player.taxiSlot);
+      if (!Number.isInteger(taxiSlot) || taxiSlot < 0) {
+        throw new AppError(`${path}.taxiSlot must be a non-negative integer`, 400);
+      }
+    }
+    normalized.taxiSlot = status === 'TAXI' ? taxiSlot : undefined;
+  }
+
+  return normalized;
+}
+
 function validateDraftStatePayload(payload = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new AppError('draft state payload must be an object', 400);
@@ -192,61 +291,11 @@ function validateDraftStatePayload(payload = {}) {
       }
 
       const players = Array.isArray(team.players)
-        ? team.players.map((player, playerIndex) => {
-            if (!player || typeof player !== 'object' || Array.isArray(player)) {
-              throw new AppError(`teams[${teamIndex}].players[${playerIndex}] must be an object`, 400);
-            }
-
-            const playerId = String(player.playerId || '').trim();
-            const status = String(player.status || '').trim().toUpperCase();
-            if (!playerId) {
-              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].playerId is required`, 400);
-            }
-            if (!['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'].includes(status)) {
-              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].status is invalid`, 400);
-            }
-
-            const cost = Number(player.cost ?? 0);
-            if (!Number.isFinite(cost) || cost < 0) {
-              throw new AppError(`teams[${teamIndex}].players[${playerIndex}].cost must be non-negative`, 400);
-            }
-
-            const assignedSlot = String(
-              player.assignedSlot ||
-                (Array.isArray(player.assignedSlots) ? player.assignedSlots[0] : '') ||
-                ''
-            )
-              .trim()
-              .toUpperCase();
-
-            let taxiSlot;
-            if (player.taxiSlot != null && player.taxiSlot !== '') {
-              taxiSlot = Number(player.taxiSlot);
-              if (!Number.isInteger(taxiSlot) || taxiSlot < 0) {
-                throw new AppError(
-                  `teams[${teamIndex}].players[${playerIndex}].taxiSlot must be a non-negative integer`,
-                  400
-                );
-              }
-            }
-
-            return {
-              playerId: Number(playerId),
-              playerName: String(player.playerName || '').trim(),
-              cost,
-              status,
-              countsAgainstBudget:
-                assignedSlot !== 'BN' && status !== 'MINOR' && status !== 'TAXI',
-              assignedSlot,
-              assignedSlots: Array.isArray(player.assignedSlots)
-                ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
-                : assignedSlot
-                  ? [assignedSlot]
-                  : [],
-              contract: player.contract ? String(player.contract).trim().toUpperCase() : undefined,
-              taxiSlot: status === 'TAXI' ? taxiSlot : undefined,
-            };
-          })
+        ? team.players.map((player, playerIndex) =>
+            normalizeDraftPlayer(player, `teams[${teamIndex}].players[${playerIndex}]`, {
+              includeTaxiSlot: true,
+            })
+          )
         : [];
 
       return {
@@ -265,43 +314,23 @@ function validateDraftStatePayload(payload = {}) {
       throw new AppError('picks must be an array', 400);
     }
 
-    normalized.picks = payload.picks.map((pick, pickIndex) => {
-      if (!pick || typeof pick !== 'object' || Array.isArray(pick)) {
-        throw new AppError(`picks[${pickIndex}] must be an object`, 400);
-      }
+    normalized.picks = payload.picks.map((pick, pickIndex) =>
+      normalizeDraftPick(pick, `picks[${pickIndex}]`)
+    );
+  }
 
-      const pickNumber = Number(pick.pickNumber);
-      const round = Number(pick.round ?? 1);
-      const cost = Number(pick.cost ?? 0);
-      const teamKey = String(pick.teamKey || '').trim();
-      const playerId = String(pick.playerId || '').trim();
-      const status = String(pick.status || 'DRAFTED').trim().toUpperCase();
+  if (payload.redoStack != null) {
+    if (!Array.isArray(payload.redoStack)) {
+      throw new AppError('redoStack must be an array', 400);
+    }
 
-      if (!Number.isInteger(pickNumber) || pickNumber <= 0) {
-        throw new AppError(`picks[${pickIndex}].pickNumber must be a positive integer`, 400);
+    normalized.redoStack = payload.redoStack.map((entry, entryIndex) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw new AppError(`redoStack[${entryIndex}] must be an object`, 400);
       }
-      if (!Number.isInteger(round) || round < 0 || (round === 0 && status !== 'KEEPER')) {
-        throw new AppError(`picks[${pickIndex}].round must be 0 for keepers or a positive integer`, 400);
-      }
-      if (!teamKey || !playerId) {
-        throw new AppError(`picks[${pickIndex}] must include teamKey and playerId`, 400);
-      }
-      if (!Number.isFinite(cost) || cost < 0) {
-        throw new AppError(`picks[${pickIndex}].cost must be non-negative`, 400);
-      }
-      if (!['DRAFTED', 'KEEPER', 'MINOR', 'TAXI'].includes(status)) {
-        throw new AppError(`picks[${pickIndex}].status is invalid`, 400);
-      }
-
       return {
-        pickNumber,
-        round,
-        teamKey,
-        playerId,
-        playerName: String(pick.playerName || '').trim(),
-        cost,
-        status,
-        timestamp: pick.timestamp ? new Date(pick.timestamp) : undefined,
+        pick: normalizeDraftPick(entry.pick, `redoStack[${entryIndex}].pick`),
+        player: normalizeDraftPlayer(entry.player, `redoStack[${entryIndex}].player`),
       };
     });
   }

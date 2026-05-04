@@ -10,7 +10,6 @@ import { playerApi } from "lib/playerApi";
 import { leagueApi } from "lib/leagueApi";
 import {
   DRAFT_VALUATION_LIMIT,
-  MLB_DEPTH_CHART_TEAMS,
   SEARCH_LIMIT,
 } from "./draftPageConstants";
 import {
@@ -61,6 +60,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [draftActionError, setDraftActionError] = useState(""); // draft/undo action error message
   const [isSavingDraftAction, setIsSavingDraftAction] = useState(false); // draft save state
   const [isUndoingLastPick, setIsUndoingLastPick] = useState(false); // undo last pick state
+  const [isRedoingLastPick, setIsRedoingLastPick] = useState(false); // redo last undone pick state
   const [customDraftPlayer, setCustomDraftPlayer] = useState(null); // manually entered unvalued draft player
 
   // Player lookup tab state
@@ -229,6 +229,9 @@ export default function useDraftPageData({ activeView, leagueId }) {
 
   const teams = Array.isArray(draftState?.teams) ? draftState.teams : [];
   const picks = Array.isArray(draftState?.picks) ? draftState.picks : [];
+  const redoStack = Array.isArray(draftState?.redoStack)
+    ? draftState.redoStack
+    : [];
 
   const draftedPlayerIds = useMemo(
     () =>
@@ -678,6 +681,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
 
       await leagueApi.updateDraftState(leagueId, {
         teams: updatedTeams,
+        redoStack: [],
       });
 
       rosterMoveSelectionKeyRef.current = "";
@@ -808,6 +812,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
         currentPickNumber: nextPickNumber + 1,
         teams: updatedTeams,
         picks: nextPicks,
+        redoStack: [],
       });
 
       setSelectedDraftPlayerId("");
@@ -837,6 +842,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
       setIsUndoingLastPick(true);
       setDraftActionError("");
 
+      let undonePlayer = null;
       const updatedTeams = teams.map((team) => {
         if (team.teamKey !== lastPick.teamKey) {
           return team;
@@ -854,6 +860,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
         }
 
         const [removedPlayer] = nextPlayers.splice(playerIndex, 1);
+        undonePlayer = removedPlayer;
         const filledSlots = { ...(team.filledSlots || {}) };
 
         for (const slot of getPersistedAssignedSlots(removedPlayer)) {
@@ -875,6 +882,10 @@ export default function useDraftPageData({ activeView, leagueId }) {
         };
       });
 
+      if (!undonePlayer) {
+        throw new Error("Could not find the last picked player on that roster.");
+      }
+
       await leagueApi.updateDraftState(leagueId, {
         userTeamKey: draftState?.userTeamKey,
         nominationTeamKey: draftState?.nominationTeamKey,
@@ -884,6 +895,15 @@ export default function useDraftPageData({ activeView, leagueId }) {
         ),
         teams: updatedTeams,
         picks: currentPicks.slice(0, -1),
+        redoStack: undonePlayer
+          ? [
+              ...redoStack,
+              {
+                pick: lastPick,
+                player: undonePlayer,
+              },
+            ]
+          : redoStack,
       });
 
       if (String(selectedDraftPlayerId) === String(lastPick.playerId)) {
@@ -897,6 +917,84 @@ export default function useDraftPageData({ activeView, leagueId }) {
       setDraftActionError(err.message || "Failed to undo last pick");
     } finally {
       setIsUndoingLastPick(false);
+    }
+  }
+
+  async function handleRedoLastPick() {
+    const redoEntry = redoStack[redoStack.length - 1];
+
+    if (!redoEntry?.pick || !redoEntry?.player) {
+      setDraftActionError("No picks to redo.");
+      return;
+    }
+
+    try {
+      setIsRedoingLastPick(true);
+      setDraftActionError("");
+
+      const { pick, player } = redoEntry;
+      const targetTeam = teams.find((team) => team.teamKey === pick.teamKey);
+      if (!targetTeam) {
+        throw new Error("Original draft team no longer exists.");
+      }
+
+      if (draftedPlayerIds.has(String(player.playerId))) {
+        throw new Error(`${player.playerName || pick.playerName} is already on a roster.`);
+      }
+
+      for (const slot of getPersistedAssignedSlots(player)) {
+        if (getOpenCountForSlot(targetTeam, slot, rosterSlots) <= 0) {
+          throw new Error(`${slot} is already full for ${targetTeam.teamName}.`);
+        }
+      }
+
+      const updatedTeams = teams.map((team) => {
+        if (team.teamKey !== pick.teamKey) {
+          return team;
+        }
+
+        const nextPlayers = [
+          ...(Array.isArray(team.players) ? team.players : []),
+          player,
+        ];
+        const filledSlots = { ...(team.filledSlots || {}) };
+
+        for (const slot of getPersistedAssignedSlots(player)) {
+          filledSlots[slot] = Number(filledSlots[slot] || 0) + 1;
+        }
+
+        return {
+          ...team,
+          spentBudget: nextPlayers.reduce(
+            (sum, rosterPlayer) =>
+              sum +
+              (rosterPlayer.countsAgainstBudget === false
+                ? 0
+                : Number(rosterPlayer.cost || 0)),
+            0,
+          ),
+          filledSlots,
+          players: nextPlayers,
+        };
+      });
+
+      await leagueApi.updateDraftState(leagueId, {
+        userTeamKey: draftState?.userTeamKey,
+        nominationTeamKey: draftState?.nominationTeamKey,
+        currentPickNumber: Math.max(
+          Number(draftState?.currentPickNumber || 1),
+          Number(pick.pickNumber || 0) + 1,
+        ),
+        teams: updatedTeams,
+        picks: [...picks, pick],
+        redoStack: redoStack.slice(0, -1),
+      });
+
+      await refreshDraftBoard({ silent: true });
+    } catch (err) {
+      setDraftActionError(err.message || "Failed to redo last pick");
+    } finally {
+      setIsRedoingLastPick(false);
     }
   }
 
@@ -947,6 +1045,9 @@ export default function useDraftPageData({ activeView, leagueId }) {
     handleMoveRosterPlayer,
     handleUndoLastPick,
     isUndoingLastPick,
+    handleRedoLastPick,
+    isRedoingLastPick,
+    redoStack,
     draftTargetTeamKey,
     setDraftTargetTeamKey,
     draftCost,

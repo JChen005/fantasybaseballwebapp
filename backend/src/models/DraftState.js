@@ -169,6 +169,24 @@ const draftStateSchema = new mongoose.Schema(
       type: [draftPickSchema],
       default: [],
     },
+    redoStack: {
+      type: [
+        new mongoose.Schema(
+          {
+            pick: {
+              type: draftPickSchema,
+              required: true,
+            },
+            player: {
+              type: draftedPlayerSchema,
+              required: true,
+            },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   {
     timestamps: { createdAt: true, updatedAt: true },

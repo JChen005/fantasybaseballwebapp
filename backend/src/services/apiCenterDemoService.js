@@ -110,6 +110,7 @@ const STAGE_CONFIG = {
 
 function buildLeagueConfig() {
   return {
+    season: 2026,
     leagueType: 'MIXED',
     budget: 260,
     scoring: 'CATEGORY',
@@ -214,6 +215,7 @@ function buildDemoDraftState(stage) {
     currentPickNumber: stagePicks.length + 1,
     teams: teamStates,
     picks,
+    redoStack: [],
   };
 }
 
