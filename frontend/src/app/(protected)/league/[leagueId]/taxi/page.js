@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import KeeperPlayerRail from 'components/KeeperPlayerRail';
+import LeaguePlayerRail from 'components/LeaguePlayerRail';
 import TaxiBoardView from './TaxiBoardView';
 import TaxiHeader from './TaxiHeader';
 import useTaxiPageData from './useTaxiPageData';
@@ -37,7 +37,7 @@ export default function Page() {
 
   return (
     <>
-      <KeeperPlayerRail
+      <LeaguePlayerRail
         selectedPlayer={selectedPlayer}
         setSelectedPlayer={setSelectedPlayer}
         leagueType={league?.config?.leagueType || null}

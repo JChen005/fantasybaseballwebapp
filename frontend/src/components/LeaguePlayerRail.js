@@ -48,7 +48,7 @@ function getEligibleKeeperSlots(player) {
 
 export { normalizePositions, getEligibleKeeperSlots };
 
-export default function KeeperPlayerRail({
+export default function LeaguePlayerRail({
   selectedPlayer,
   setSelectedPlayer,
   leagueType = null,

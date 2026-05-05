@@ -14,6 +14,9 @@ import {
   isEntryEmpty,
 } from './taxiPageUtils';
 
+const EMPTY_TEAMS = [];
+const EMPTY_ROSTER_SLOTS = {};
+
 export default function useTaxiPageData({ leagueId, selectedPlayer, setSelectedPlayer }) {
   const [draftState, setDraftState] = useState(null);
   const [league, setLeague] = useState(null);
@@ -38,8 +41,8 @@ export default function useTaxiPageData({ leagueId, selectedPlayer, setSelectedP
       });
   }, [leagueId]);
 
-  const teams = draftState?.teams || [];
-  const rosterSlots = league?.config?.rosterSlots || {};
+  const teams = draftState?.teams || EMPTY_TEAMS;
+  const rosterSlots = league?.config?.rosterSlots || EMPTY_ROSTER_SLOTS;
   const taxiSlotCount = getTaxiSlotCount(rosterSlots);
 
   const teamOptions = useMemo(

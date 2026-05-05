@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
-import KeeperPlayerRail, { getEligibleKeeperSlots } from 'components/KeeperPlayerRail';
+import LeaguePlayerRail, { getEligibleKeeperSlots } from 'components/LeaguePlayerRail';
 import KeeperBoardView from './KeeperBoardView';
 import KeeperHeader from './KeeperHeader';
 import useKeeperPageData from './useKeeperPageData';
@@ -57,7 +57,7 @@ export default function Page() {
 
   return (
     <>
-      <KeeperPlayerRail
+      <LeaguePlayerRail
         selectedPlayer={selectedPlayer}
         setSelectedPlayer={(player) => {
           setSlotError('');
