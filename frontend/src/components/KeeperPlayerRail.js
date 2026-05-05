@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import LeagueFlowNav from 'components/LeagueFlowNav';
 import { playerApi } from 'lib/playerApi';
 
 function normalizePositions(player) {
@@ -57,7 +57,6 @@ export default function KeeperPlayerRail({
 }) {
   const [players, setPlayers] = useState(null);
   const pathname = usePathname();
-  const basePath = pathname?.substring(0, pathname.lastIndexOf('/')) || '';
 
   useEffect(() => {
     setPlayers((prevPlayers) => {
@@ -108,20 +107,11 @@ export default function KeeperPlayerRail({
 
   return (
     <div className="fixed left-0 top-0 h-full w-55 p-3">
-      <div className="rounded border border-slate-200 flex">
-        <Link className="text-s px-1" href={`${basePath}/config`}>
-          Config
-        </Link>
-        <Link className="text-s px-1" href={`${basePath}/keeper`}>
-          Keeper
-        </Link>
-        <Link className="text-s px-1" href={`${basePath}/draft`}>
-          Draft
-        </Link>
-        <Link className="text-s px-1" href={`${basePath}/taxi`}>
-          Taxi
-        </Link>
-      </div>
+      {(pathname?.includes('/keeper') || pathname?.includes('/taxi')) ? (
+        <div className="mb-4">
+          <LeagueFlowNav compact />
+        </div>
+      ) : null}
 
       <input
         className="input input-bordered my-2"
