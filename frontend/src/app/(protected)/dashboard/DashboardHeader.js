@@ -1,7 +1,7 @@
 export default function DashboardHeader({ draftkitHealth, leagueCountLabel }) {
   return (
     <div className="panel">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <h1 className="text-2xl font-semibold"></h1>
       <p className="text-sm text-slate-600">
         DraftKit API <strong>{draftkitHealth}</strong>
       </p>
