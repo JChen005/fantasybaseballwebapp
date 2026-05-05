@@ -13,6 +13,7 @@ export default function DashboardPage() {
       <DashboardHeader
         draftkitHealth={dashboardData.draftkitHealth}
         leagueCountLabel={dashboardData.leagueCountLabel}
+        userDisplayName={dashboardData.userDisplayName}
       />
       <CreateLeagueForm {...dashboardData} />
       <DashboardLeagueList {...dashboardData} />

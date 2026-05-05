@@ -5,6 +5,7 @@ export default function useDashboardPageData() {
   const [leagues, setLeagues] = useState([]);
   const [name, setName] = useState('My League');
   const [season, setSeason] = useState(2026);
+  const [userDisplayName, setUserDisplayName] = useState('');
   const [error, setError] = useState('');
   const [draftkitHealth, setDraftkitHealth] = useState('checking...');
   const [creatingLeague, setCreatingLeague] = useState(false);
@@ -22,7 +23,10 @@ export default function useDashboardPageData() {
 
     async function loadDashboard() {
       try {
-        await loadLeagues();
+        const [meData] = await Promise.all([draftkitApi.me(), loadLeagues()]);
+        if (!cancelled) {
+          setUserDisplayName(meData?.user?.displayName || meData?.displayName || '');
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message || 'Failed to load leagues');
@@ -108,5 +112,6 @@ export default function useDashboardPageData() {
     season,
     setName,
     setSeason,
+    userDisplayName,
   };
 }
