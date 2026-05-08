@@ -87,3 +87,61 @@ describe('fantasyRules query parsing', () => {
     expect(parseJsonQueryParam('{not-json}', { fallback: true })).toEqual({ fallback: true });
   });
 });
+
+
+describe('fantasyRules additional edge cases', () => {
+  test('gives two-way players both P and UTIL eligibility when configured', () => {
+    expect(getCanonicalEligibleSlots(['TWP'], { P: 9, UTIL: 1 })).toEqual(['P', 'UTIL']);
+  });
+
+  test('returns no eligible slots when positions are missing or not configured', () => {
+    expect(getCanonicalEligibleSlots(undefined, { OF: 5, UTIL: 1 })).toEqual([]);
+    expect(getCanonicalEligibleSlots(['SS'], { OF: 5, UTIL: 1 })).toEqual([]);
+  });
+
+  test('does not mark player as needed when all eligible slots are full', () => {
+    expect(getRoleNeedDetails(['SS'], { SS: 1, UTIL: 1 }, { SS: 1, UTIL: 1 })).toEqual({
+      eligibleSlots: ['SS', 'UTIL'],
+      neededSlots: [],
+      fillsNeed: false,
+    });
+  });
+
+  test('parseJsonQueryParam returns object values directly for Express parsed query objects', () => {
+    const queryObject = { OF: '3' };
+    expect(parseJsonQueryParam(queryObject)).toBe(queryObject);
+  });
+});
+
+
+describe('fantasyRules expanded eligibility coverage', () => {
+  test.each([
+    ['2B', '2B'], ['4', '2B'], ['secondBase', '2B'], ['3B', '3B'], ['5', '3B'], ['thirdBase', '3B'],
+    ['SS', 'SS'], ['6', 'SS'], ['shortstop', 'SS'], ['DH', 'UTIL'], ['UT', 'UTIL'],
+  ])('normalizes additional position alias %p to %p', (input, expected) => {
+    expect(normalizeRosterSlot(input)).toBe(expected);
+  });
+
+  test('deduplicates eligibility when positions map to the same slot', () => {
+    expect(getCanonicalEligibleSlots(['LF', 'CF', 'OF', '9'], { OF: 5, UTIL: 1 })).toEqual(['OF', 'UTIL']);
+  });
+
+  test('allows explicitly utility-only players to fill UTIL when configured', () => {
+    expect(getCanonicalEligibleSlots(['UTIL'], { OF: 5, UTIL: 1 })).toEqual(['UTIL']);
+  });
+
+  test('returns no needed slots when the league has no matching configured slots', () => {
+    expect(getRoleNeedDetails(['C', '1B'], { P: 9 }, { P: 0 })).toEqual({ eligibleSlots: [], neededSlots: [], fillsNeed: false });
+  });
+
+  test('enriches players with empty position data safely', () => {
+    expect(enrichPlayerForFantasyRules({ name: 'Unknown Player' }, { rosterSlots: { OF: 5 } })).toMatchObject({
+      name: 'Unknown Player', eligibleSlots: [], neededSlots: [], displayPositions: [], fillsNeed: false,
+    });
+  });
+
+  test('parseJsonQueryParam uses fallback for scalar JSON values', () => {
+    expect(parseJsonQueryParam('42', { fallback: true })).toEqual({ fallback: true });
+    expect(parseJsonQueryParam('null', { fallback: true })).toEqual({ fallback: true });
+  });
+});
