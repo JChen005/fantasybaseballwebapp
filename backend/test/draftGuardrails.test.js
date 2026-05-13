@@ -177,7 +177,46 @@ describe('draft guardrail helper edge cases', () => {
   });
 
   test('strict guardrails require every main roster player to have a valid assigned slot', () => {
-    expect(() => assertDraftStateGuardrails([{ teamKey: 'team-1', teamName: 'Missing Slot', budget: 260, players: [makePlayer({ assignedSlot: '', assignedSlots: [] })] }], rosterSlots)).toThrow('Missing Slot');
-    expect(() => assertDraftStateGuardrails([{ teamKey: 'team-1', teamName: 'Invalid Slot', budget: 260, players: [makePlayer({ assignedSlot: 'SS', assignedSlots: ['SS'] })] }], rosterSlots)).toThrow('invalid slot SS');
+    const playerWithoutSlot = {
+      playerId: 123,
+      playerName: 'No Slot Player',
+      status: 'DRAFTED',
+      cost: 1,
+      assignedSlot: '',
+      assignedSlots: [],
+    };
+
+    expect(() =>
+      assertDraftStateGuardrails(
+        [
+          {
+            teamKey: 'team-1',
+            teamName: 'Missing Slot',
+            budget: 260,
+            players: [playerWithoutSlot],
+          },
+        ],
+        rosterSlots,
+      )
+    ).toThrow('must have an assigned roster slot');
+
+    expect(() =>
+      assertDraftStateGuardrails(
+        [
+          {
+            teamKey: 'team-1',
+            teamName: 'Invalid Slot',
+            budget: 260,
+            players: [
+              makePlayer({
+                assignedSlot: 'SS',
+                assignedSlots: ['SS'],
+              }),
+            ],
+          },
+        ],
+        rosterSlots,
+      )
+    ).toThrow('invalid slot SS');
   });
 });

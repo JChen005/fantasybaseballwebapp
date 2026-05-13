@@ -201,7 +201,7 @@ function normalizeDraftPlayer(player, path, { includeTaxiSlot = false } = {}) {
     cost,
     status,
     countsAgainstBudget:
-      assignedSlot !== 'BN' && status !== 'MINOR' && status !== 'TAXI',
+      status !== 'MINOR' && status !== 'TAXI' && player.countsAgainstBudget !== false,
     assignedSlot,
     assignedSlots: Array.isArray(player.assignedSlots)
       ? player.assignedSlots.map((slot) => String(slot).trim().toUpperCase()).filter(Boolean)
