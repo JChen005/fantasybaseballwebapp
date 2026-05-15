@@ -79,6 +79,29 @@ export function formatPlayerPositions(positions) {
   return displayPositions.length ? displayPositions.join(', ') : 'N/A';
 }
 
+export function computePlayerAge(player) {
+  const currentAge = Number(player?.currentAge);
+  if (Number.isFinite(currentAge) && currentAge > 0) {
+    return Math.floor(currentAge);
+  }
+
+  const rawBirthDate = player?.birthDate || player?.birthdate || player?.birth_date;
+  if (!rawBirthDate) return null;
+
+  const birthDate = new Date(rawBirthDate);
+  if (Number.isNaN(birthDate.getTime())) return null;
+
+  const now = new Date();
+  let years = now.getUTCFullYear() - birthDate.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - birthDate.getUTCMonth();
+  const dayDiff = now.getUTCDate() - birthDate.getUTCDate();
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    years -= 1;
+  }
+
+  return years >= 0 ? years : null;
+}
+
 export function buildPlayerRow(player) {
   const neededSlots = Array.isArray(player.neededSlots) ? player.neededSlots : [];
   const position = Array.isArray(player.displayPositions) && player.displayPositions.length
@@ -97,7 +120,9 @@ export function buildPlayerRow(player) {
     statsLastYear: player.statsLastYear || null,
     stats3Year: player.stats3Year || null,
     injuryStatus: player.injuryStatus,
-    transactions: player.transactions
+    transactions: player.transactions,
+    birthDate: player.birthDate || player.birthdate || player.birth_date || null,
+    age: computePlayerAge(player),
   };
 }
 

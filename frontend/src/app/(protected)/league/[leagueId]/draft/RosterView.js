@@ -13,8 +13,23 @@ export default function RosterView({
   isMovingRosterPlayer,
   handleSelectRosterMove,
   handleMoveRosterPlayer,
+  handleUndo,
+  handleRedo,
+  canUndo,
+  canRedo,
+  isProcessingHistory,
+  nextUndoDescription,
+  nextRedoDescription,
 }) {
   const [expandedTeams, setExpandedTeams] = useState({});
+
+  const selectedRosterMoveTeamName = useMemo(() => {
+    if (!selectedRosterMove?.teamKey) return '';
+    const sourceTeam = rosterRows.find(
+      (team) => team.teamKey === selectedRosterMove.teamKey,
+    );
+    return sourceTeam?.teamName || selectedRosterMove.teamKey;
+  }, [rosterRows, selectedRosterMove?.teamKey]);
 
   function toggleTeam(teamKey) {
     setExpandedTeams((prev) => ({
@@ -25,9 +40,33 @@ export default function RosterView({
 
   return (
     <div className="panel">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">Team Roster</h2>
-        <p className="text-sm text-slate-600">Current roster state for each team in the league.</p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Team Roster</h2>
+          <p className="text-sm text-slate-600">Current roster state for each team in the league.</p>
+        </div>
+        {typeof handleUndo === 'function' && typeof handleRedo === 'function' ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleUndo}
+              disabled={isProcessingHistory || isMovingRosterPlayer || !canUndo}
+              title={nextUndoDescription ? `Undo: ${nextUndoDescription}` : 'Nothing to undo'}
+            >
+              {isProcessingHistory ? 'Undoing...' : 'Undo'}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleRedo}
+              disabled={isProcessingHistory || isMovingRosterPlayer || !canRedo}
+              title={nextRedoDescription ? `Redo: ${nextRedoDescription}` : 'Nothing to redo'}
+            >
+              {isProcessingHistory ? 'Redoing...' : 'Redo'}
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {rosterMoveError ? (
@@ -43,10 +82,19 @@ export default function RosterView({
           aria-live="polite"
         >
           <span className="font-semibold">{selectedRosterMove.playerName}</span>
+          {selectedRosterMoveTeamName ? (
+            <span className="text-emerald-100">
+              {' · From '}
+              {selectedRosterMoveTeamName}
+            </span>
+          ) : null}
           <span className="text-emerald-100">
             {selectedRosterMove.isLoadingEligibleSlots
               ? ' · Loading eligible slots...'
               : ` · Eligible: ${selectedRosterMove.eligibleSlots?.length ? selectedRosterMove.eligibleSlots.join(', ') : 'none found'}`}
+          </span>
+          <span className="ml-1 text-emerald-100/80">
+            · Click an empty slot on any team to move
           </span>
         </div>
       ) : null}
@@ -232,19 +280,18 @@ function TeamSlotBoard({
             const isEligibleTarget = Boolean(selectedRosterMove?.eligibleSlots?.includes(slot));
             const canMoveHere =
               hasSelectedPlayer &&
-              isSameTeam &&
               isEligibleTarget &&
               !selectedRosterMove?.isLoadingEligibleSlots &&
               !isMovingRosterPlayer;
             const emptySlotLabel = !hasSelectedPlayer
               ? 'Empty'
-              : !isSameTeam
-                ? 'Different team'
-                : selectedRosterMove?.isLoadingEligibleSlots
-                  ? 'Checking...'
-                  : isEligibleTarget
+              : selectedRosterMove?.isLoadingEligibleSlots
+                ? 'Checking...'
+                : isEligibleTarget
+                  ? isSameTeam
                     ? 'Move here'
-                    : 'Not eligible';
+                    : 'Move to this team'
+                  : 'Not eligible';
 
             return (
               <tr
@@ -294,7 +341,7 @@ function TeamSlotBoard({
                         className={`rounded px-2 py-1 text-left transition disabled:cursor-not-allowed disabled:hover:bg-transparent ${
                           canMoveHere
                             ? 'font-medium text-emerald-100 hover:bg-emerald-400/10'
-                            : hasSelectedPlayer && isSameTeam && !isEligibleTarget && !selectedRosterMove?.isLoadingEligibleSlots
+                            : hasSelectedPlayer && !isEligibleTarget && !selectedRosterMove?.isLoadingEligibleSlots
                               ? 'text-slate-600'
                               : 'text-slate-500 disabled:hover:text-slate-500'
                         }`}

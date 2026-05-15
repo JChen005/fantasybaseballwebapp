@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useMemo, useState } from 'react';
-import { leagueApi } from 'lib/leagueApi';
+import React, { useMemo, useState } from "react";
+import { leagueApi } from "lib/leagueApi";
 
-const CONTRACT_OPTIONS = ['F3', 'F2', 'F1', 'S3', 'S2', 'S1', 'X', 'LX'];
+const CONTRACT_OPTIONS = ["F3", "F2", "F1", "S3", "S2", "S1", "X", "LX"];
 
 export default function DraftBoardView({
   leagueId,
@@ -30,11 +30,13 @@ export default function DraftBoardView({
   PlayerCell,
   selectedDraftPlayer,
   picks,
-  handleUndoLastPick,
-  isUndoingLastPick,
-  handleRedoLastPick,
-  isRedoingLastPick,
-  redoStack,
+  handleUndo,
+  handleRedo,
+  canUndo,
+  canRedo,
+  isProcessingHistory,
+  nextUndoDescription,
+  nextRedoDescription,
   draftTargetTeamKey,
   setDraftTargetTeamKey,
   teams,
@@ -57,15 +59,30 @@ export default function DraftBoardView({
   const [expandedRows, setExpandedRows] = useState({});
   const [playerNotes, setPlayerNotes] = useState({});
   const [showCustomPlayerForm, setShowCustomPlayerForm] = useState(false);
+  const [valueSortDirection, setValueSortDirection] = useState("desc");
   const [customPlayerForm, setCustomPlayerForm] = useState({
-    name: '',
-    team: 'CUSTOM',
-    position: 'UTIL',
+    name: "",
+    team: "CUSTOM",
+    position: "UTIL",
   });
+
+  const sortedDraftRows = useMemo(() => {
+    const sorted = [...filteredDraftRows];
+    sorted.sort((a, b) => {
+      const aValue = Number(a.adjustedValue || 0);
+      const bValue = Number(b.adjustedValue || 0);
+      return valueSortDirection === "asc" ? aValue - bValue : bValue - aValue;
+    });
+    return sorted;
+  }, [filteredDraftRows, valueSortDirection]);
+
+  function toggleValueSortDirection() {
+    setValueSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+  }
 
   const savedNotesByPlayerId = useMemo(() => {
     return (league?.playerNotes || []).reduce((acc, note) => {
-      acc[String(note.id)] = note.notes || '';
+      acc[String(note.id)] = note.notes || "";
       return acc;
     }, {});
   }, [league?.playerNotes]);
@@ -85,7 +102,11 @@ export default function DraftBoardView({
   }
 
   async function handleNoteSave(row) {
-    const note = (playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? '').trim();
+    const note = (
+      playerNotes[String(row.id)] ??
+      savedNotesByPlayerId[String(row.id)] ??
+      ""
+    ).trim();
 
     await leagueApi.createPlayerNote(leagueId, {
       id: Number(row.id),
@@ -103,16 +124,16 @@ export default function DraftBoardView({
   function handleUseCustomPlayer() {
     const name = customPlayerForm.name.trim();
     const position = customPlayerForm.position
-      .split(',')
+      .split(",")
       .map((value) => value.trim().toUpperCase())
       .filter(Boolean)
-      .join(', ');
+      .join(", ");
 
     if (!name || !position) return;
 
     handleSelectCustomDraftPlayer({
       name,
-      team: customPlayerForm.team.trim().toUpperCase() || 'CUSTOM',
+      team: customPlayerForm.team.trim().toUpperCase() || "CUSTOM",
       position,
     });
     setShowCustomPlayerForm(false);
@@ -128,18 +149,20 @@ export default function DraftBoardView({
               <button
                 type="button"
                 className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleUndoLastPick}
-                disabled={isUndoingLastPick || isRedoingLastPick || !picks.length}
+                onClick={handleUndo}
+                disabled={isProcessingHistory || !canUndo}
+                title={nextUndoDescription ? `Undo: ${nextUndoDescription}` : 'Nothing to undo'}
               >
-                {isUndoingLastPick ? 'Undoing...' : 'Undo'}
+                {isProcessingHistory ? "Undoing..." : "Undo"}
               </button>
               <button
                 type="button"
                 className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm font-semibold text-slate-100 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleRedoLastPick}
-                disabled={isUndoingLastPick || isRedoingLastPick || !redoStack.length}
+                onClick={handleRedo}
+                disabled={isProcessingHistory || !canRedo}
+                title={nextRedoDescription ? `Redo: ${nextRedoDescription}` : 'Nothing to redo'}
               >
-                {isRedoingLastPick ? 'Redoing...' : 'Redo'}
+                {isProcessingHistory ? "Redoing..." : "Redo"}
               </button>
             </div>
           </div>
@@ -155,27 +178,39 @@ export default function DraftBoardView({
           <div className="grid gap-3 md:grid-cols-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-white">Team</span>
-              <select className="input" value={draftTeamFilter} onChange={(event) => setDraftTeamFilter(event.target.value)}>
+              <select
+                className="input"
+                value={draftTeamFilter}
+                onChange={(event) => setDraftTeamFilter(event.target.value)}
+              >
                 {draftTeamOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option === 'ALL' ? 'All Teams' : option}
+                    {option === "ALL" ? "All Teams" : option}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-white">Role</span>
-              <select className="input" value={draftRoleFilter} onChange={(event) => setDraftRoleFilter(event.target.value)}>
+              <select
+                className="input"
+                value={draftRoleFilter}
+                onChange={(event) => setDraftRoleFilter(event.target.value)}
+              >
                 {draftRoleOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option === 'ALL' ? 'All Roles' : option}
+                    {option === "ALL" ? "All Roles" : option}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-white">Role Need</span>
-              <select className="input" value={draftNeedFilter} onChange={(event) => setDraftNeedFilter(event.target.value)}>
+              <select
+                className="input"
+                value={draftNeedFilter}
+                onChange={(event) => setDraftNeedFilter(event.target.value)}
+              >
                 <option value="ALL">All</option>
                 <option value="YES">Need Only</option>
                 <option value="NO">No Need</option>
@@ -195,7 +230,9 @@ export default function DraftBoardView({
                 <p className="font-semibold text-white">
                   Player Update: {draftNotification.playerName}
                 </p>
-                <p className="mt-0.5 truncate text-cyan-50/80">{draftNotification.detail}</p>
+                <p className="mt-0.5 truncate text-cyan-50/80">
+                  {draftNotification.detail}
+                </p>
               </div>
               <button
                 type="button"
@@ -217,7 +254,9 @@ export default function DraftBoardView({
         ) : draftSearchError ? (
           <p className="text-sm text-red-600">{draftSearchError}</p>
         ) : !filteredDraftRows.length ? (
-          <p className="text-sm text-slate-600">No players match the current draft filters.</p>
+          <p className="text-sm text-slate-600">
+            No players match the current draft filters.
+          </p>
         ) : (
           <div className="max-h-[720px] overflow-auto">
             <table className="min-w-full text-sm">
@@ -225,12 +264,24 @@ export default function DraftBoardView({
                 <tr className="border-b border-slate-200 text-left">
                   <th className="px-2 py-2 font-medium">Player</th>
                   <th className="px-2 py-2 font-medium">Pos</th>
-                  <th className="px-2 py-2 font-medium">Value</th>
+                  <th className="px-2 py-2 font-medium">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 font-medium text-white transition hover:text-cyan-200"
+                      onClick={toggleValueSortDirection}
+                      aria-label={`Sort by value ${valueSortDirection === "asc" ? "descending" : "ascending"}`}
+                    >
+                      <span>Value</span>
+                      <span className="text-xs text-slate-400">
+                        {valueSortDirection === "asc" ? "▲" : "▼"}
+                      </span>
+                    </button>
+                  </th>
                   <th className="px-2 py-2 font-medium">Role Need</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredDraftRows.map((row) => {
+                {sortedDraftRows.map((row) => {
                   const isSelected = selectedDraftPlayerId === row.id;
                   const isExpanded = !!expandedRows[row.id];
 
@@ -238,7 +289,7 @@ export default function DraftBoardView({
                     <React.Fragment key={row.id}>
                       <tr
                         className={`cursor-pointer border-b border-slate-200/70 transition hover:bg-white/5 ${
-                          isSelected ? 'bg-white/6' : ''
+                          isSelected ? "bg-white/6" : ""
                         }`}
                         onClick={() => handleSelectDraftPlayer(row)}
                       >
@@ -251,23 +302,27 @@ export default function DraftBoardView({
                                 event.stopPropagation();
                                 toggleRowExpanded(row.id);
                               }}
-                              aria-label={isExpanded ? 'Collapse stats' : 'Expand stats'}
+                              aria-label={
+                                isExpanded ? "Collapse stats" : "Expand stats"
+                              }
                             >
-                              {isExpanded ? '▾' : '▸'}
+                              {isExpanded ? "▾" : "▸"}
                             </button>
                             <PlayerCell row={row} />
                           </div>
                         </td>
                         <td className="px-2 py-2">{row.position}</td>
                         <td className="px-2 py-2 font-semibold text-white">
-                          {typeof row.adjustedValue === 'number' ? `$${row.adjustedValue}` : 'N/A'}
+                          {typeof row.adjustedValue === "number"
+                            ? `$${row.adjustedValue}`
+                            : "N/A"}
                         </td>
                         <td className="px-2 py-2">
-                          {typeof row.fillsNeed === 'boolean'
+                          {typeof row.fillsNeed === "boolean"
                             ? row.fillsNeed
-                              ? `Yes${row.neededSlots?.length ? ` · ${row.neededSlots.join(', ')}` : ''}`
-                              : 'No'
-                            : 'N/A'}
+                              ? `Yes${row.neededSlots?.length ? ` · ${row.neededSlots.join(", ")}` : ""}`
+                              : "No"
+                            : "N/A"}
                         </td>
                       </tr>
 
@@ -280,7 +335,13 @@ export default function DraftBoardView({
                               stats3Year={row.stats3Year}
                               injuryStatus={row.injuryStatus}
                               transactions={row.transactions}
-                              note={playerNotes[String(row.id)] ?? savedNotesByPlayerId[String(row.id)] ?? ''}
+                              age={row.age}
+                              birthDate={row.birthDate}
+                              note={
+                                playerNotes[String(row.id)] ??
+                                savedNotesByPlayerId[String(row.id)] ??
+                                ""
+                              }
                               onNoteChange={handleNoteChange}
                               onNoteSave={handleNoteSave}
                             />
@@ -299,19 +360,25 @@ export default function DraftBoardView({
       <div className="panel">
         <div className="mb-4">
           <h2 className="text-lg font-semibold">Draft Control</h2>
-          <p className="text-sm text-slate-600">Click a player from the valuation pool to populate this panel.</p>
+          <p className="text-sm text-slate-600">
+            Click a player from the valuation pool to populate this panel.
+          </p>
         </div>
         {!selectedDraftPlayer ? (
           <div className="space-y-4">
             <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-900/35 p-4">
-              <p className="text-sm text-slate-500">Select a player from the pool to draft them.</p>
+              <p className="text-sm text-slate-500">
+                Select a player from the pool to draft them.
+              </p>
             </div>
             <button
               type="button"
               className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/5"
               onClick={() => setShowCustomPlayerForm((current) => !current)}
             >
-              {showCustomPlayerForm ? 'Hide Custom Player' : 'Draft Custom Player'}
+              {showCustomPlayerForm
+                ? "Hide Custom Player"
+                : "Draft Custom Player"}
             </button>
             {showCustomPlayerForm ? (
               <div className="space-y-3 rounded-xl border border-slate-700/60 bg-slate-900/45 p-4">
@@ -320,7 +387,9 @@ export default function DraftBoardView({
                   <input
                     className="input"
                     value={customPlayerForm.name}
-                    onChange={(event) => handleCustomPlayerChange('name', event.target.value)}
+                    onChange={(event) =>
+                      handleCustomPlayerChange("name", event.target.value)
+                    }
                     placeholder="Custom player"
                   />
                 </label>
@@ -330,28 +399,38 @@ export default function DraftBoardView({
                     <input
                       className="input"
                       value={customPlayerForm.team}
-                      onChange={(event) => handleCustomPlayerChange('team', event.target.value)}
+                      onChange={(event) =>
+                        handleCustomPlayerChange("team", event.target.value)
+                      }
                       placeholder="CUSTOM"
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-white">Eligible Roles</span>
+                    <span className="font-medium text-white">
+                      Eligible Roles
+                    </span>
                     <input
                       className="input"
                       value={customPlayerForm.position}
-                      onChange={(event) => handleCustomPlayerChange('position', event.target.value)}
+                      onChange={(event) =>
+                        handleCustomPlayerChange("position", event.target.value)
+                      }
                       placeholder="C, 1B, 2B, 3B, SS, OF, P, UTIL"
                     />
                   </label>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Custom players are saved to the draft, but they are not valued by the Player API.
+                  Custom players are saved to the draft, but they are not valued
+                  by the Player API.
                 </p>
                 <button
                   type="button"
                   className="w-full rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleUseCustomPlayer}
-                  disabled={!customPlayerForm.name.trim() || !customPlayerForm.position.trim()}
+                  disabled={
+                    !customPlayerForm.name.trim() ||
+                    !customPlayerForm.position.trim()
+                  }
                 >
                   Use Custom Player
                 </button>
@@ -370,12 +449,17 @@ export default function DraftBoardView({
                   />
                 ) : null}
                 <div>
-                  <h3 className="text-base font-semibold text-white">{selectedDraftPlayer.name}</h3>
+                  <h3 className="text-base font-semibold text-white">
+                    {selectedDraftPlayer.name}
+                  </h3>
                   <p className="text-sm text-slate-500">
-                    {selectedDraftPlayer.team || 'No Team'} · {selectedDraftPlayer.position}
+                    {selectedDraftPlayer.team || "No Team"} ·{" "}
+                    {selectedDraftPlayer.position}
                   </p>
                   {selectedDraftPlayer.isCustomPlayer ? (
-                    <p className="mt-1 text-xs text-amber-200">Custom player · no API valuation</p>
+                    <p className="mt-1 text-xs text-amber-200">
+                      Custom player · no API valuation
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -384,7 +468,13 @@ export default function DraftBoardView({
             <div className="grid gap-3">
               <label className="flex flex-col gap-1 text-sm">
                 <span className="font-medium text-white">Draft To Team</span>
-                <select className="input" value={draftTargetTeamKey} onChange={(event) => setDraftTargetTeamKey(event.target.value)}>
+                <select
+                  className="input"
+                  value={draftTargetTeamKey}
+                  onChange={(event) =>
+                    setDraftTargetTeamKey(event.target.value)
+                  }
+                >
                   {teams.map((team) => (
                     <option key={team.teamKey} value={team.teamKey}>
                       {team.teamName}
@@ -416,12 +506,19 @@ export default function DraftBoardView({
                   onChange={(event) => setDraftAssignedSlot(event.target.value)}
                   disabled={!draftEligibleSlots.length}
                 >
-                  {!draftEligibleSlots.length ? <option value="">No eligible slots</option> : null}
+                  {!draftEligibleSlots.length ? (
+                    <option value="">No eligible slots</option>
+                  ) : null}
                   {draftEligibleSlots.map((slot) => {
-                    const openCount = getOpenCountForSlot(draftTargetTeam, slot, rosterSlots);
+                    const openCount = getOpenCountForSlot(
+                      draftTargetTeam,
+                      slot,
+                      rosterSlots,
+                    );
                     return (
                       <option key={slot} value={slot} disabled={openCount <= 0}>
-                        {slot}{openCount > 0 ? ` (${openCount} open)` : ' (full)'}
+                        {slot}
+                        {openCount > 0 ? ` (${openCount} open)` : " (full)"}
                       </option>
                     );
                   })}
@@ -429,7 +526,9 @@ export default function DraftBoardView({
               </label>
             </div>
 
-            {draftActionError ? <p className="text-sm text-red-600">{draftActionError}</p> : null}
+            {draftActionError ? (
+              <p className="text-sm text-red-600">{draftActionError}</p>
+            ) : null}
 
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium text-white">Contract</span>
@@ -453,7 +552,7 @@ export default function DraftBoardView({
                 onClick={handleDraftPlayer}
                 disabled={isSavingDraftAction}
               >
-                {isSavingDraftAction ? 'Saving...' : 'Draft Player'}
+                {isSavingDraftAction ? "Saving..." : "Draft Player"}
               </button>
               {selectedDraftPlayer.isCustomPlayer ? (
                 <button
@@ -478,18 +577,22 @@ function DraftStatsTable({
   stats3Year,
   injuryStatus,
   transactions,
+  age,
+  birthDate,
   note,
   onNoteChange,
   onNoteSave,
 }) {
   const [showTransactions, setShowTransactions] = useState(false);
-  const statKeys = ['avg', 'hr', 'rbi', 'sb', 'w', 'k', 'era', 'whip'];
-  const transactionCount = Array.isArray(transactions) ? transactions.length : 0;
+  const statKeys = ["avg", "hr", "rbi", "sb", "w", "k", "era", "whip"];
+  const transactionCount = Array.isArray(transactions)
+    ? transactions.length
+    : 0;
 
   function formatStat(value, key) {
-    if (value === null || value === undefined || value === '') return '—';
+    if (value === null || value === undefined || value === "") return "—";
 
-    if (['avg', 'era', 'whip'].includes(key) && typeof value === 'number') {
+    if (["avg", "era", "whip"].includes(key) && typeof value === "number") {
       return value.toFixed(3);
     }
 
@@ -528,8 +631,20 @@ function DraftStatsTable({
             <td colSpan={statKeys.length + 1} className="px-2 py-2">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
                 <span>
-                  <span className="font-medium text-slate-400">Injury status:</span>{' '}
-                  <span className="text-white">{injuryStatus || 'Active'}</span>
+                  <span className="font-medium text-slate-400">Age:</span>{" "}
+                  <span
+                    className="text-white"
+                    title={birthDate ? `Born ${formatBirthDate(birthDate)}` : undefined}
+                  >
+                    {Number.isFinite(age) ? age : "—"}
+                  </span>
+                </span>
+
+                <span>
+                  <span className="font-medium text-slate-400">
+                    Injury status:
+                  </span>{" "}
+                  <span className="text-white">{injuryStatus || "Active"}</span>
                 </span>
 
                 <button
@@ -537,9 +652,13 @@ function DraftStatsTable({
                   className="inline-flex items-center gap-1 text-left transition hover:text-white"
                   onClick={() => setShowTransactions((prev) => !prev)}
                 >
-                  <span className="font-medium text-slate-400">Transactions:</span>
+                  <span className="font-medium text-slate-400">
+                    Transactions:
+                  </span>
                   <span className="text-white">{transactionCount}</span>
-                  <span className="text-slate-400">{showTransactions ? '▾' : '▸'}</span>
+                  <span className="text-slate-400">
+                    {showTransactions ? "▾" : "▸"}
+                  </span>
                 </button>
               </div>
             </td>
@@ -555,9 +674,13 @@ function DraftStatsTable({
                         key={`${transaction.date}-${transaction.type}-${index}`}
                         className="text-slate-300"
                       >
-                        <span className="text-slate-400">{transaction.date || '—'}</span>
-                        <span className="mx-2 text-white">{transaction.type || '—'}</span>
-                        <span>{transaction.detail || ''}</span>
+                        <span className="text-slate-400">
+                          {transaction.date || "—"}
+                        </span>
+                        <span className="mx-2 text-white">
+                          {transaction.type || "—"}
+                        </span>
+                        <span>{transaction.detail || ""}</span>
                       </div>
                     ))}
                   </div>
@@ -576,7 +699,7 @@ function DraftStatsTable({
                 placeholder="Add note (enter to save)"
                 onChange={(event) => onNoteChange(row.id, event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     onNoteSave(row);
                   }
@@ -588,6 +711,18 @@ function DraftStatsTable({
       </table>
     </div>
   );
+}
+
+function formatBirthDate(birthDate) {
+  if (!birthDate) return "";
+  const date = new Date(birthDate);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function StatsRow({ label, stats, statKeys, formatStat }) {
