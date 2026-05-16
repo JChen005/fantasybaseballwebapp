@@ -8,13 +8,15 @@ import { leagueApi } from 'lib/leagueApi';
 const SLOT_ORDER = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL', 'P', 'BN'];
 const INCLUDED_PLAYER_STATUSES = new Set(['KEEPER', 'DRAFTED', 'TAXI']);
 
+const DRAFT_HISTORY_TAB = 'draft-history';
+
 export default function Page() {
   const params = useParams();
   const leagueId = Array.isArray(params?.leagueId) ? params.leagueId[0] : params?.leagueId;
 
   const [league, setLeague] = useState(null);
   const [draftState, setDraftState] = useState(null);
-  const [selectedTeamKey, setSelectedTeamKey] = useState('');
+  const [activeTab, setActiveTab] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -59,12 +61,18 @@ export default function Page() {
   useEffect(() => {
     if (!teams.length) return;
 
-    if (!selectedTeamKey || !teams.some((team) => team.teamKey === selectedTeamKey)) {
-      setSelectedTeamKey(teams[0].teamKey);
-    }
-  }, [teams, selectedTeamKey]);
+    const isTeamTab = teams.some((team) => team.teamKey === activeTab);
+    const isDraftHistoryTab = activeTab === DRAFT_HISTORY_TAB;
 
-  const selectedTeam = teams.find((team) => team.teamKey === selectedTeamKey) || teams[0] || null;
+    if (!activeTab || (!isTeamTab && !isDraftHistoryTab)) {
+      setActiveTab(teams[0].teamKey);
+    }
+  }, [teams, activeTab]);
+
+  const selectedTeam =
+    activeTab === DRAFT_HISTORY_TAB
+      ? null
+      : teams.find((team) => team.teamKey === activeTab) || teams[0] || null;
 
   const rosteredPlayerCount = useMemo(() => {
     return teams.reduce((count, team) => count + getPostDraftPlayers(team.players).length, 0);
@@ -105,16 +113,14 @@ export default function Page() {
               <SummaryCard label="Recorded Picks" value={picks.length} />
             </div>
 
-            <PostDraftSlotsView
+            <PostDraftReviewView
               teams={teams}
               picks={picks}
-              selectedTeamKey={selectedTeamKey}
-              setSelectedTeamKey={setSelectedTeamKey}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
               selectedTeam={selectedTeam}
               rosterSlots={rosterSlots}
             />
-
-            <DraftedPicksView picks={picks} teams={teams} />
           </>
         )}
       </section>
@@ -131,21 +137,25 @@ function SummaryCard({ label, value }) {
   );
 }
 
-function PostDraftSlotsView({
+function PostDraftReviewView({
   teams,
   picks,
-  selectedTeamKey,
-  setSelectedTeamKey,
+  activeTab,
+  setActiveTab,
   selectedTeam,
   rosterSlots,
 }) {
+  const isDraftHistory = activeTab === DRAFT_HISTORY_TAB;
+
   return (
     <div className="panel">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">All Post-Draft Players by Slot</h2>
+          <h2 className="text-lg font-semibold">Post-Draft Review</h2>
           <p className="text-sm text-slate-600">
-            Includes keepers, drafted players, taxi players, empty slots, and overflow rows.
+            {isDraftHistory
+              ? 'Complete draft-pick history from the persisted draft log.'
+              : 'Keepers, drafted players, and taxi players by roster slot.'}
           </p>
         </div>
 
@@ -158,29 +168,52 @@ function PostDraftSlotsView({
         </button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <nav
+        className="mb-4 flex flex-wrap items-center gap-2"
+        aria-label="Post-draft teams and draft history"
+      >
         {teams.map((team) => (
-          <button
+          <PostDraftTabButton
             key={team.teamKey}
-            type="button"
-            onClick={() => setSelectedTeamKey(team.teamKey)}
-            className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-              selectedTeamKey === team.teamKey
-                ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-50'
-                : 'border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-white/5'
-            }`}
+            active={activeTab === team.teamKey}
+            onClick={() => setActiveTab(team.teamKey)}
           >
             {team.teamName || team.teamKey}
-          </button>
+          </PostDraftTabButton>
         ))}
-      </div>
+        <span className="mx-1 hidden h-8 w-px bg-slate-600/80 sm:inline-block" aria-hidden />
+        <PostDraftTabButton
+          active={isDraftHistory}
+          onClick={() => setActiveTab(DRAFT_HISTORY_TAB)}
+        >
+          Draft History
+        </PostDraftTabButton>
+      </nav>
 
-      {selectedTeam ? (
+      {isDraftHistory ? (
+        <DraftHistoryTable picks={picks} teams={teams} />
+      ) : selectedTeam ? (
         <TeamSlotBoard team={selectedTeam} rosterSlots={rosterSlots} />
       ) : (
         <p className="text-sm text-slate-600">No team selected.</p>
       )}
     </div>
+  );
+}
+
+function PostDraftTabButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+        active
+          ? 'border-emerald-300/70 bg-emerald-400/20 text-emerald-50'
+          : 'border-slate-700 bg-slate-900/60 text-slate-200 hover:bg-white/5'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -226,10 +259,9 @@ function TeamSlotBoard({ team, rosterSlots }) {
                 </td>
                 <td className="px-3 py-3">
                   {player ? (
-                    <div>
-                      <p className="font-medium text-white">{player.playerName || player.playerId}</p>
-                      <p className="text-xs text-slate-500">ID {player.playerId}</p>
-                    </div>
+                    <p className="font-medium text-white">
+                      {player.playerName || 'Unnamed player'}
+                    </p>
                   ) : (
                     <span className="text-slate-600">Empty</span>
                   )}
@@ -248,7 +280,7 @@ function TeamSlotBoard({ team, rosterSlots }) {
   );
 }
 
-function DraftedPicksView({ picks, teams }) {
+function DraftHistoryTable({ picks, teams }) {
   const teamNameByKey = useMemo(
     () => new Map(teams.map((team) => [team.teamKey, team.teamName || team.teamKey])),
     [teams]
@@ -259,53 +291,45 @@ function DraftedPicksView({ picks, teams }) {
     [picks]
   );
 
-  return (
-    <div className="panel">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">Draft Picks</h2>
-        <p className="text-sm text-slate-600">Complete draft-pick history from the persisted draft log.</p>
-      </div>
+  if (!sortedPicks.length) {
+    return <p className="text-sm text-slate-600">No picks have been recorded yet.</p>;
+  }
 
-      {!sortedPicks.length ? (
-        <p className="text-sm text-slate-600">No picks have been recorded yet.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-2">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 text-left">
-                <th className="w-24 px-3 py-3 font-medium text-white">Pick</th>
-                <th className="w-24 px-3 py-3 font-medium text-white">Round</th>
-                <th className="min-w-44 px-3 py-3 font-medium text-white">Player</th>
-                <th className="min-w-40 px-3 py-3 font-medium text-white">Team</th>
-                <th className="w-24 px-3 py-3 font-medium text-white">Contract</th>
-                <th className="w-24 px-3 py-3 font-medium text-white">Cost</th>
-                <th className="w-36 px-3 py-3 font-medium text-white">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedPicks.map((pick) => (
-                <tr
-                  key={`${pick.pickNumber}-${pick.playerId}`}
-                  className="border-b border-slate-700/50 last:border-0"
-                >
-                  <td className="px-3 py-3 font-semibold text-white">{pick.pickNumber || '—'}</td>
-                  <td className="px-3 py-3 text-slate-300">{pick.round || '—'}</td>
-                  <td className="px-3 py-3">
-                    <p className="font-medium text-white">{pick.playerName || pick.playerId}</p>
-                    <p className="text-xs text-slate-500">ID {pick.playerId}</p>
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">
-                    {teamNameByKey.get(pick.teamKey) || pick.teamKey || '—'}
-                  </td>
-                  <td className="px-3 py-3 text-slate-300">{pick.contract || '—'}</td>
-                  <td className="px-3 py-3 font-semibold text-slate-200">${Number(pick.cost || 0)}</td>
-                  <td className="px-3 py-3 text-slate-300">{pick.status || 'DRAFTED'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+  return (
+    <div className="overflow-x-auto rounded-xl border border-slate-700/60 bg-slate-900/45 p-2">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 text-left">
+            <th className="w-24 px-3 py-3 font-medium text-white">Pick</th>
+            <th className="w-24 px-3 py-3 font-medium text-white">Round</th>
+            <th className="min-w-44 px-3 py-3 font-medium text-white">Player</th>
+            <th className="min-w-40 px-3 py-3 font-medium text-white">Team</th>
+            <th className="w-24 px-3 py-3 font-medium text-white">Contract</th>
+            <th className="w-24 px-3 py-3 font-medium text-white">Cost</th>
+            <th className="w-36 px-3 py-3 font-medium text-white">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedPicks.map((pick) => (
+            <tr
+              key={`${pick.pickNumber}-${pick.playerId}`}
+              className="border-b border-slate-700/50 last:border-0"
+            >
+              <td className="px-3 py-3 font-semibold text-white">{pick.pickNumber || '—'}</td>
+              <td className="px-3 py-3 text-slate-300">{pick.round || '—'}</td>
+              <td className="px-3 py-3 font-medium text-white">
+                {pick.playerName || 'Unnamed player'}
+              </td>
+              <td className="px-3 py-3 text-slate-300">
+                {teamNameByKey.get(pick.teamKey) || pick.teamKey || '—'}
+              </td>
+              <td className="px-3 py-3 text-slate-300">{pick.contract || '—'}</td>
+              <td className="px-3 py-3 font-semibold text-slate-200">${Number(pick.cost || 0)}</td>
+              <td className="px-3 py-3 text-slate-300">{pick.status || 'DRAFTED'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
