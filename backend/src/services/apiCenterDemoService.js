@@ -3,6 +3,8 @@ const {
   updateDraftStateForLeague,
   updateLeagueConfigForUser,
 } = require('./leagueService');
+const { callPlayerApi } = require('./playerApiClient');
+const { getCanonicalEligibleSlots } = require('./fantasyRules');
 
 const DEMO_TEAMS = [
   ['team-a', 'You', 'Team A'],
@@ -27,6 +29,21 @@ const DEMO_ROSTER_SLOTS = {
   P: 9,
   BN: 8,
 };
+
+const FINISHED_DRAFT_ROSTER_SLOTS = {
+  ...DEMO_ROSTER_SLOTS,
+  P: 6,
+  BN: 3,
+};
+
+const FINISHED_DRAFT_TAXI_ROSTER_SLOTS = {
+  ...DEMO_ROSTER_SLOTS,
+  P: 6,
+  BN: 3,
+};
+
+const SLOT_ORDER = ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL', 'P', 'BN'];
+const DEMO_PLAYER_POOL_LIMIT = 500;
 
 const DEMO_KEEPERS = [
   { teamKey: 'team-a', playerId: 686948, playerName: 'Drake Baldwin', slot: 'C', cost: 5, contract: 'F1' },
@@ -106,16 +123,41 @@ const STAGE_CONFIG = {
   draft12: { label: 'Draft After 12 Picks', pickCount: 12, includeKeepers: true, route: 'draft' },
   draft24: { label: 'Draft After 24 Picks', pickCount: 24, includeKeepers: true, route: 'draft' },
   draft36: { label: 'Draft After 36 Picks', pickCount: 36, includeKeepers: true, route: 'draft' },
+  draftFinished: {
+    label: 'Finished Draft',
+    pickCount: DEMO_DRAFT_PICKS.length,
+    includeKeepers: true,
+    route: 'post-draft',
+    includeTaxi: false,
+    rosterSlots: FINISHED_DRAFT_ROSTER_SLOTS,
+    excludeBenchDrafts: true,
+    fillBenchWithDraftedPlayers: false,
+  },
+  draftFinishedTaxi: {
+    label: 'Finished Draft + Taxi',
+    pickCount: DEMO_DRAFT_PICKS.length,
+    includeKeepers: true,
+    route: 'post-draft',
+    includeTaxi: true,
+    rosterSlots: FINISHED_DRAFT_TAXI_ROSTER_SLOTS,
+    excludeBenchDrafts: true,
+    fillBenchWithDraftedPlayers: false,
+  },
 };
 
-function buildLeagueConfig() {
+function getRosterSlotsForStage(stageConfig = {}) {
+  return stageConfig.rosterSlots || DEMO_ROSTER_SLOTS;
+}
+
+function buildLeagueConfig(stageConfig = {}) {
+  const rosterSlots = getRosterSlotsForStage(stageConfig);
   return {
     season: 2026,
     leagueType: 'MIXED',
     budget: 260,
     scoring: 'CATEGORY',
     teamCount: DEMO_TEAMS.length,
-    rosterSlots: DEMO_ROSTER_SLOTS,
+    rosterSlots,
     teamNames: DEMO_TEAMS.map(([, , teamName]) => teamName),
     teams: DEMO_TEAMS.map(([teamKey, ownerName, teamName]) => ({
       teamKey,
@@ -179,27 +221,226 @@ function createDraftedEntry(entry) {
   };
 }
 
-function buildDemoDraftState(stage) {
+function recalculateTeamState(team) {
+  const players = Array.isArray(team.players) ? team.players : [];
+  const spentBudget = players.reduce((sum, player) => {
+    return player.countsAgainstBudget === false ? sum : sum + Number(player.cost || 0);
+  }, 0);
+
+  const filledSlots = players.reduce((accumulator, player) => {
+    const assignedSlots = Array.isArray(player.assignedSlots) && player.assignedSlots.length
+      ? player.assignedSlots
+      : player.assignedSlot
+        ? [player.assignedSlot]
+        : [];
+
+    for (const slot of assignedSlots) {
+      if (!slot) continue;
+      accumulator[slot] = Number(accumulator[slot] || 0) + 1;
+    }
+
+    return accumulator;
+  }, {});
+
+  return {
+    ...team,
+    spentBudget,
+    filledSlots,
+  };
+}
+
+function getPrimaryAssignedSlot(player) {
+  if (Array.isArray(player?.assignedSlots) && player.assignedSlots.length) {
+    return String(player.assignedSlots[0] || '').trim().toUpperCase();
+  }
+
+  return String(player?.assignedSlot || '').trim().toUpperCase();
+}
+
+function buildOpenSlotPlan(team, rosterSlots = {}) {
+  const slotUsage = (Array.isArray(team?.players) ? team.players : []).reduce(
+    (accumulator, player) => {
+      const slot = getPrimaryAssignedSlot(player);
+      if (!slot) return accumulator;
+      accumulator[slot] = Number(accumulator[slot] || 0) + 1;
+      return accumulator;
+    },
+    {},
+  );
+
+  return SLOT_ORDER.flatMap((slot) => {
+    const configuredCount = Number(rosterSlots?.[slot] || 0);
+    const currentCount = Number(slotUsage[slot] || 0);
+    const neededCount = Math.max(0, configuredCount - currentCount);
+
+    return Array.from({ length: neededCount }, (_, index) => ({ slot, index }));
+  });
+}
+
+function generatedDraftPlayerCost(slot, index) {
+  if (slot === 'BN') return 1;
+  if (slot === 'P') return 3 + (index % 2);
+  if (slot === 'OF') return 4 + (index % 2);
+  if (slot === 'UTIL') return 3;
+  return 4;
+}
+
+function createGeneratedDraftedEntry({ player, slot, index }) {
+  return {
+    playerId: Number(player.mlbPlayerId),
+    playerName: player.name,
+    cost: generatedDraftPlayerCost(slot, index),
+    status: 'DRAFTED',
+    assignedSlot: slot,
+    assignedSlots: [slot],
+    contract: 'X',
+  };
+}
+
+function createGeneratedTaxiEntry({ player, taxiSlot }) {
+  return {
+    playerId: Number(player.mlbPlayerId),
+    playerName: player.name,
+    cost: 0,
+    status: 'TAXI',
+    countsAgainstBudget: false,
+    assignedSlot: 'BN',
+    assignedSlots: ['BN'],
+    taxiSlot,
+  };
+}
+
+async function fetchDemoPlayerPool() {
+  const result = await callPlayerApi({
+    path: '/v1/players',
+    query: {
+      limit: DEMO_PLAYER_POOL_LIMIT,
+      includeInactive: false,
+    },
+    retries: 2,
+    retryOnStatuses: [429],
+  });
+
+  if (!result.ok) {
+    throw new Error('Failed to load player pool for demo generation.');
+  }
+
+  return Array.isArray(result.data?.players) ? result.data.players : [];
+}
+
+function selectEligibleDemoPlayer({
+  playerPool,
+  usedPlayerIds,
+  slot,
+  rosterSlots,
+}) {
+  const matchIndex = playerPool.findIndex((player) => {
+    const playerId = Number(player?.mlbPlayerId);
+    if (!Number.isInteger(playerId) || usedPlayerIds.has(playerId)) return false;
+
+    const eligibleSlots = getCanonicalEligibleSlots(player?.positions || [], rosterSlots);
+    if (slot === 'BN') {
+      return eligibleSlots.length > 0;
+    }
+
+    return eligibleSlots.includes(slot);
+  });
+
+  if (matchIndex < 0) {
+    throw new Error(`Could not find a real player for slot ${slot}.`);
+  }
+
+  const [player] = playerPool.splice(matchIndex, 1);
+  usedPlayerIds.add(Number(player.mlbPlayerId));
+  return player;
+}
+
+async function buildDemoDraftState(stage) {
   const stageConfig = STAGE_CONFIG[stage] || STAGE_CONFIG.empty;
+  const rosterSlots = getRosterSlotsForStage(stageConfig);
   const teamStates = buildTeamStates();
   const teamMap = new Map(teamStates.map((team) => [team.teamKey, team]));
+  const usedPlayerIds = new Set();
 
   if (stageConfig.includeKeepers) {
     for (const keeper of DEMO_KEEPERS) {
+      usedPlayerIds.add(Number(keeper.playerId));
       addPlayerToTeam(teamMap, keeper.teamKey, createKeeperEntry(keeper));
     }
 
     for (const minor of DEMO_MINORS) {
+      usedPlayerIds.add(Number(minor.playerId));
       addPlayerToTeam(teamMap, minor.teamKey, createMinorEntry(minor));
     }
   }
 
-  const stagePicks = DEMO_DRAFT_PICKS.slice(0, stageConfig.pickCount);
+  const stagePicks = DEMO_DRAFT_PICKS
+    .filter((pick) => !(stageConfig.excludeBenchDrafts && pick.slot === 'BN'))
+    .slice(0, stageConfig.pickCount);
   for (const pick of stagePicks) {
+    usedPlayerIds.add(Number(pick.playerId));
     addPlayerToTeam(teamMap, pick.teamKey, createDraftedEntry(pick));
   }
 
-  const picks = stagePicks.map((pick, index) => ({
+  const generatedPicks = [];
+  const playerPool = stageConfig.pickCount >= DEMO_DRAFT_PICKS.length || stageConfig.includeTaxi
+    ? await fetchDemoPlayerPool()
+    : [];
+
+  if (stageConfig.pickCount >= DEMO_DRAFT_PICKS.length) {
+    for (const team of teamStates) {
+      const openSlots = buildOpenSlotPlan(team, rosterSlots).filter(
+        ({ slot }) => stageConfig.fillBenchWithDraftedPlayers !== false || slot !== 'BN',
+      );
+
+      for (const { slot, index } of openSlots) {
+        const player = selectEligibleDemoPlayer({
+          playerPool,
+          usedPlayerIds,
+          slot,
+          rosterSlots,
+        });
+        const entry = createGeneratedDraftedEntry({ player, slot, index });
+
+        addPlayerToTeam(teamMap, team.teamKey, entry);
+
+        const pickNumber = stagePicks.length + generatedPicks.length + 1;
+        generatedPicks.push({
+          pickNumber,
+          round: Math.floor((pickNumber - 1) / DEMO_TEAMS.length) + 1,
+          teamKey: team.teamKey,
+          playerId: Number(player.mlbPlayerId),
+          playerName: entry.playerName,
+          cost: entry.cost,
+          status: 'DRAFTED',
+        });
+      }
+    }
+  }
+
+  if (stageConfig.includeTaxi) {
+    const taxiSlotCount = Number(rosterSlots.BN || 0);
+
+    for (const team of teamStates) {
+      for (let taxiSlot = 0; taxiSlot < taxiSlotCount; taxiSlot += 1) {
+        const player = selectEligibleDemoPlayer({
+          playerPool,
+          usedPlayerIds,
+          slot: 'BN',
+          rosterSlots,
+        });
+
+        addPlayerToTeam(
+          teamMap,
+          team.teamKey,
+          createGeneratedTaxiEntry({ player, taxiSlot }),
+        );
+      }
+    }
+  }
+
+  const picks = [
+    ...stagePicks.map((pick, index) => ({
     pickNumber: pick.pickNumber,
     round: Math.floor(index / DEMO_TEAMS.length) + 1,
     teamKey: pick.teamKey,
@@ -207,13 +448,17 @@ function buildDemoDraftState(stage) {
     playerName: pick.playerName,
     cost: pick.cost,
     status: 'DRAFTED',
-  }));
+    })),
+    ...generatedPicks,
+  ];
+
+  const normalizedTeams = teamStates.map(recalculateTeamState);
 
   return {
     userTeamKey: 'team-a',
-    nominationTeamKey: stagePicks[stagePicks.length - 1]?.teamKey || '',
-    currentPickNumber: stagePicks.length + 1,
-    teams: teamStates,
+    nominationTeamKey: picks[picks.length - 1]?.teamKey || '',
+    currentPickNumber: picks.length + 1,
+    teams: normalizedTeams,
     picks,
     redoStack: [],
   };
@@ -224,9 +469,10 @@ async function createDemoLeagueForStage(userId, stage) {
   const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
   const league = await createLeagueForUser(userId, `API Center - ${stageConfig.label} ${timestamp}`);
   const configuredLeague = await updateLeagueConfigForUser(league._id, userId, {
-    config: buildLeagueConfig(),
+    config: buildLeagueConfig(stageConfig),
   });
-  const draftState = await updateDraftStateForLeague(league._id, userId, buildDemoDraftState(stage));
+  const demoDraftState = await buildDemoDraftState(stage);
+  const draftState = await updateDraftStateForLeague(league._id, userId, demoDraftState);
 
   return {
     league: configuredLeague,

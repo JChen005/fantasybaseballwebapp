@@ -65,23 +65,26 @@ export default function useKeeperPageData({ leagueId, selectedPlayer }) {
 
   useEffect(() => {
     const missingIds = draftStatePlayerIds.filter((id) => !playerPool[id]);
+
     if (!missingIds.length) return;
 
-    Promise.all(missingIds.map((playerId) => playerApi.getPlayerById(playerId)))
-      .then((results) => {
+    Promise.allSettled(missingIds.map((playerId) => playerApi.getPlayerById(playerId))).then(
+      (results) => {
         setPlayerPool((current) => {
           const next = { ...current };
+
           for (const result of results) {
-            const player = result?.player || result;
+            if (result.status !== 'fulfilled') continue;
+
+            const player = result.value?.player || result.value;
             const id = player?.mlbPlayerId ?? player?.playerId;
             if (id != null) next[Number(id)] = player;
           }
+
           return next;
         });
-      })
-      .catch((loadError) => {
-        console.error('Failed to hydrate keeper player pool', loadError);
-      });
+      },
+    );
   }, [draftStatePlayerIds, playerPool]);
 
   function updateEntry(teamKey, slot, slotIndex, updates) {
