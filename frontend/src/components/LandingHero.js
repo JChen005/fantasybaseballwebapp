@@ -102,23 +102,23 @@ export default function LandingHero() {
                 </h1>
 
                 <p className="mt-5 max-w-3xl text-[15px] leading-8 text-white/82 sm:text-[17px]">
-                  DraftElite gives fantasy baseball managers a clearer edge on draft day, with one
-                  place to prep league context, track roster decisions, and stay in control when
-                  the room starts moving fast.
+                  DraftElite keeps the full fantasy baseball workflow in one place, from league
+                  setup and keeper planning to the live draft, taxi assignments, and post-draft
+                  review.
                 </p>
 
                 <ul className="mt-6 space-y-3 text-sm text-white/78">
                   <li className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                    <span>League-specific draft prep with keeper, main draft, and taxi-round context.</span>
+                    <span>Configure league rules, roster slots, contracts, and budget context before the draft starts.</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                    <span>Player API integration for live search, value snapshots, and fast board reads.</span>
+                    <span>Work through keeper, draft, taxi, and post-draft pages inside the same league workspace.</span>
                   </li>
                   <li className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#54d7b0]" />
-                    <span>Secure account sessions so each league workspace stays private and persistent.</span>
+                    <span>Use live player search, sortable stats, valuation snapshots, draft history, roster views, and MLB depth context during the draft.</span>
                   </li>
                 </ul>
               </div>
@@ -146,13 +146,13 @@ export default function LandingHero() {
               className="mt-7 grid max-w-[720px] gap-3 text-sm text-white/80 md:grid-cols-3"
             >
               <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                Keeper round tracking
+                Keeper planning
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                Main draft decision support
+                Live draft control
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/8 px-4 py-3 backdrop-blur-sm">
-                Taxi round planning
+                Taxi and post-draft review
               </div>
             </FadeUp>
           </div>

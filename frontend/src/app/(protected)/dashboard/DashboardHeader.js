@@ -1,15 +1,15 @@
 function StatusChip({ label, tone = 'default', value }) {
   const toneClass =
     tone === 'success'
-      ? 'border-emerald-400/20 bg-emerald-400/8 text-emerald-100'
+      ? 'border-emerald-400/28 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.05))] text-emerald-50'
       : tone === 'error'
-        ? 'border-rose-400/20 bg-rose-400/8 text-rose-100'
-        : 'border-white/8 bg-white/[0.03] text-slate-200';
+        ? 'border-rose-400/28 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.05))] text-rose-50'
+        : 'border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] text-slate-100';
 
   return (
-    <div className={`rounded-full border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
+    <div className={`min-w-[112px] rounded-[1.35rem] border px-4 py-3 shadow-[0_12px_28px_rgba(2,6,23,0.16)] ${toneClass}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-white/55">{label}</p>
+      <p className="mt-1 text-base font-semibold leading-none">{value}</p>
     </div>
   );
 }
@@ -23,6 +23,12 @@ export default function DashboardHeader({ draftkitHealth, leagueCountLabel, user
         ? 'error'
         : 'default';
   const greetingName = userDisplayName || 'manager';
+  const displayHealth =
+    normalizedHealth === 'ok'
+      ? 'OK'
+      : normalizedHealth === 'error'
+        ? 'Error'
+        : 'Checking';
 
   return (
     <div className="panel">
@@ -34,9 +40,9 @@ export default function DashboardHeader({ draftkitHealth, leagueCountLabel, user
           </h1>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           <StatusChip label="Leagues" value={leagueCountLabel} />
-          <StatusChip label="API Status" value={draftkitHealth} tone={healthTone} />
+          <StatusChip label="API Status" value={displayHealth} tone={healthTone} />
         </div>
       </div>
     </div>
