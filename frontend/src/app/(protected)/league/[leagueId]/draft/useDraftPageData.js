@@ -82,6 +82,7 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [draftActionError, setDraftActionError] = useState(""); // draft/undo action error message
   const [isSavingDraftAction, setIsSavingDraftAction] = useState(false); // draft save state
   const [isProcessingHistory, setIsProcessingHistory] = useState(false); // undo/redo dispatch in flight
+  const [historyBanner, setHistoryBanner] = useState(null); // { type: 'undo'|'redo', description } after history change
   const [customDraftPlayer, setCustomDraftPlayer] = useState(null); // manually entered unvalued draft player
 
   // Session-scoped unified undo/redo log. Each entry captures the full state
@@ -90,12 +91,27 @@ export default function useDraftPageData({ activeView, leagueId }) {
   const [actionLog, setActionLog] = useState({ past: [], future: [] });
 
   const recordAction = useCallback((description, prev, next) => {
+    setHistoryBanner(null);
     setActionLog((current) => {
       const nextPast = [...current.past, { description, prev, next }];
       const trimmed = nextPast.slice(-ACTION_HISTORY_LIMIT);
       return { past: trimmed, future: [] };
     });
   }, []);
+
+  const dismissHistoryBanner = useCallback(() => {
+    setHistoryBanner(null);
+  }, []);
+
+  useEffect(() => {
+    if (!historyBanner) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      setHistoryBanner(null);
+    }, 6000);
+
+    return () => clearTimeout(timeoutId);
+  }, [historyBanner]);
 
   // Player lookup tab state
   const [playerSearchQuery, setPlayerSearchQuery] = useState(""); // lookup tab search text
@@ -1056,6 +1072,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
       rosterMoveSelectionKeyRef.current = "";
       setSelectedRosterMove(null);
 
+      setHistoryBanner({ type: "undo", description: entry.description });
+
       await refreshDraftBoard({ silent: true });
     } catch (err) {
       setDraftActionError(err.message || "Failed to undo last action");
@@ -1090,6 +1108,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
       setDraftCost("");
       rosterMoveSelectionKeyRef.current = "";
       setSelectedRosterMove(null);
+
+      setHistoryBanner({ type: "redo", description: entry.description });
 
       await refreshDraftBoard({ silent: true });
     } catch (err) {
@@ -1154,6 +1174,8 @@ export default function useDraftPageData({ activeView, leagueId }) {
     nextRedoDescription:
       actionLog.future[actionLog.future.length - 1]?.description || "",
     isProcessingHistory,
+    historyBanner,
+    dismissHistoryBanner,
     redoStack,
     draftTargetTeamKey,
     setDraftTargetTeamKey,
