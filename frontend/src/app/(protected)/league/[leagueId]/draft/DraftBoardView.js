@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { leagueApi } from "lib/leagueApi";
+import { isPlayerStatApplicable } from "./draftPageUtils";
 
 const CONTRACT_OPTIONS = ["F3", "F2", "F1", "S3", "S2", "S1", "X", "LX"];
 
@@ -590,6 +591,7 @@ function DraftStatsTable({
     : 0;
 
   function formatStat(value, key) {
+    if (!isPlayerStatApplicable(row, key)) return "-";
     if (value === null || value === undefined || value === "") return "—";
 
     if (["avg", "era", "whip"].includes(key) && typeof value === "number") {

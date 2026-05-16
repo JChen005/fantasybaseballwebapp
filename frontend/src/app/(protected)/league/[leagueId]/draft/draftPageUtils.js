@@ -16,6 +16,40 @@ export function formatAverage(value) {
   return typeof value === 'number' ? value.toFixed(3) : '---';
 }
 
+export function getPlayerStatsSortValue(row, key) {
+  if (key === 'name' || key === 'position') {
+    return String(row?.[key] || '');
+  }
+
+  return Number(row?.statsLastYear?.[key] || 0);
+}
+
+export function formatPlayerStatValue(value, key) {
+  if (!Number.isFinite(value)) return '—';
+  if (['avg', 'era', 'whip'].includes(key)) {
+    return value.toFixed(3);
+  }
+  return String(value);
+}
+
+export function isPlayerStatApplicable(row, key) {
+  const positions = parsePositionList(row?.position);
+  const isPitcher = positions.includes('P');
+  const isHitter = positions.some((position) =>
+    ['C', '1B', '2B', '3B', 'SS', 'OF', 'UTIL'].includes(position)
+  );
+
+  if (['hr', 'rbi', 'sb', 'avg'].includes(key)) {
+    return isHitter;
+  }
+
+  if (['w', 'k', 'era', 'whip'].includes(key)) {
+    return isPitcher;
+  }
+
+  return true;
+}
+
 export function normalizeRosterSlot(position) {
   const normalized = String(position || '').trim().toUpperCase();
 
@@ -245,4 +279,3 @@ export function getDraftPickRound(currentPickNumber, teamCount) {
   const teams = Math.max(1, Number(teamCount) || 1);
   return Math.floor((Math.max(1, Number(currentPickNumber) || 1) - 1) / teams) + 1;
 }
-
