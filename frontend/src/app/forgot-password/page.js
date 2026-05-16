@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
                 Reset your password.
               </h1>
               <p className="text-sm leading-7 text-white/72">
-                Enter the email for your DraftElite account. In demo mode, the reset link will appear here.
+                Enter the email for your DraftElite account.
               </p>
             </div>
 
