@@ -122,13 +122,14 @@ const STAGE_CONFIG = {
   keepers: { label: 'League With Keepers', pickCount: 0, includeKeepers: true, route: 'keeper' },
   draft12: { label: 'Draft After 12 Picks', pickCount: 12, includeKeepers: true, route: 'draft' },
   draft24: { label: 'Draft After 24 Picks', pickCount: 24, includeKeepers: true, route: 'draft' },
-  draft36: { label: 'Draft After 36 Picks', pickCount: 36, includeKeepers: true, route: 'draft' },
+  draft36: { label: 'Draft After 36 Picks', pickCount: 30, includeKeepers: true, route: 'draft' },
   draftFinished: {
     label: 'Finished Draft',
     pickCount: DEMO_DRAFT_PICKS.length,
     includeKeepers: true,
     route: 'post-draft',
     includeTaxi: false,
+    includeMinors: false,
     rosterSlots: FINISHED_DRAFT_ROSTER_SLOTS,
     excludeBenchDrafts: true,
     fillBenchWithDraftedPlayers: false,
@@ -137,8 +138,9 @@ const STAGE_CONFIG = {
     label: 'Finished Draft + Taxi',
     pickCount: DEMO_DRAFT_PICKS.length,
     includeKeepers: true,
-    route: 'post-draft',
+    route: 'taxi',
     includeTaxi: true,
+    includeMinors: false,
     rosterSlots: FINISHED_DRAFT_TAXI_ROSTER_SLOTS,
     excludeBenchDrafts: true,
     fillBenchWithDraftedPlayers: false,
@@ -368,9 +370,11 @@ async function buildDemoDraftState(stage) {
       addPlayerToTeam(teamMap, keeper.teamKey, createKeeperEntry(keeper));
     }
 
-    for (const minor of DEMO_MINORS) {
-      usedPlayerIds.add(Number(minor.playerId));
-      addPlayerToTeam(teamMap, minor.teamKey, createMinorEntry(minor));
+    if (stageConfig.includeMinors !== false) {
+      for (const minor of DEMO_MINORS) {
+        usedPlayerIds.add(Number(minor.playerId));
+        addPlayerToTeam(teamMap, minor.teamKey, createMinorEntry(minor));
+      }
     }
   }
 

@@ -32,7 +32,7 @@ export const DEMO_STAGE_OPTIONS = [
   {
     id: 'draftFinishedTaxi',
     label: 'Open Finished Draft + Taxi',
-    description: 'Open a completed league after both the draft and taxi assignments are done.',
+    description: 'Open the taxi board in a completed league after both the draft and taxi assignments are done.',
     accent: 'TAXI',
   },
 ];
