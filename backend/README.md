@@ -8,6 +8,7 @@ Express + MongoDB backend for the DraftKit web application.
 - league CRUD
 - persisted `DraftState` storage per league
 - Player API proxy routes
+- API Center routes for license status, admin actions, demo leagues, and mock transaction notifications
 - fantasy-rule enrichment used by the webapp
 
 `DraftState` ownership lives here, not in the Player API.
@@ -57,6 +58,15 @@ npm test
 - `DELETE /api/leagues/:leagueId`
 - `GET /api/leagues/:leagueId/draft-state`
 - `PUT /api/leagues/:leagueId/draft-state`
+- `POST /api/leagues/:leagueId/player-notes`
+
+### API Center
+
+- `GET /api/api-center/license-status`
+- `POST /api/api-center/admin/generate-player-key`
+- `POST /api/api-center/admin/refresh-player-data`
+- `POST /api/api-center/admin/player-transaction`
+- `POST /api/api-center/demo/load-stage`
 
 ### Player Proxy
 
@@ -66,8 +76,11 @@ npm test
 - `POST /api/player/valuations/players`
 - `GET /api/player/players/:playerId`
 - `GET /api/player/players/:playerId/transactions`
+- `GET /api/player/transactions/recent`
 - `GET /api/player/teams/:teamId/depth-chart`
 - `GET /api/player/docs/openapi`
+
+Mock transaction notifications are stored in memory via `mockNotificationService.js` and returned by `/api/player/transactions/recent` for the draft board polling UI.
 
 ## Key Modules
 
@@ -76,4 +89,7 @@ npm test
 - `src/services/leagueService.js`
 - `src/services/fantasyRules.js`
 - `src/routes/leagueRoutes.js`
+- `src/routes/apiCenterRoutes.js`
 - `src/routes/playerProxyRoutes.js`
+- `src/services/apiCenterDemoService.js`
+- `src/services/mockNotificationService.js`
