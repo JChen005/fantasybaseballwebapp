@@ -129,7 +129,6 @@ If that service is down, draft valuations and depth-chart views will fail.
 - `POST /api/player/valuations/players`
 - `GET /api/player/players/:playerId`
 - `GET /api/player/players/:playerId/transactions`
-- `GET /api/player/stats/league-averages`
 - `GET /api/player/teams/:teamId/depth-chart`
 - `GET /api/player/docs/openapi`
 

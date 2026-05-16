@@ -22,7 +22,6 @@ const CACHE_TTLS_MS = {
   health: 30_000,
   players: 120_000,
   depthChart: 120_000,
-  leagueAverages: 24 * 60 * 60 * 1000,
 };
 
 function enrichPlayersResponse(payload, context = {}) {
@@ -190,21 +189,6 @@ router.get(
     const playerId = validatePlayerId(req.params.playerId);
     const result = await callPlayerApi({
       path: `/v1/players/${playerId}`,
-    });
-    res.status(result.status).json(result.data);
-  })
-);
-
-router.get(
-  '/stats/league-averages',
-  asyncHandler(async (req, res) => {
-    const result = await proxyWithCache({
-      key: 'league-averages',
-      ttlMs: CACHE_TTLS_MS.leagueAverages,
-      upstreamRequest: () =>
-        callPlayerApi({
-          path: '/v1/stats/league-averages',
-        }),
     });
     res.status(result.status).json(result.data);
   })

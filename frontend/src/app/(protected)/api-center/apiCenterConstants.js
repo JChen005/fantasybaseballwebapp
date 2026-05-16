@@ -1,11 +1,5 @@
 export const DEMO_STAGE_OPTIONS = [
   {
-    id: 'empty',
-    label: 'Start New League',
-    description: 'Begin with a fresh league and empty setup.',
-    accent: 'SETUP',
-  },
-  {
     id: 'keepers',
     label: 'Open Keepers View',
     description: 'Jump into a league that already has keepers and minors tracked.',
@@ -28,5 +22,17 @@ export const DEMO_STAGE_OPTIONS = [
     label: 'Open Later Draft',
     description: 'See a deeper draft with tighter roster decisions.',
     accent: 'LATER',
+  },
+  {
+    id: 'draftFinished',
+    label: 'Open Finished Draft',
+    description: 'Jump into a completed draft and review final rosters and picks.',
+    accent: 'FINAL',
+  },
+  {
+    id: 'draftFinishedTaxi',
+    label: 'Open Finished Draft + Taxi',
+    description: 'Open the taxi board in a completed league after both the draft and taxi assignments are done.',
+    accent: 'TAXI',
   },
 ];

@@ -11,32 +11,32 @@ import BrandMark from "components/BrandMark";
 const pillars = [
   {
     icon: Target,
-    title: "Draft Focus",
-    body: "DraftElite keeps league setup, keeper context, live player search, and round-by-round decisions in one place.",
+    title: "Draft Workflow",
+    body: "DraftElite gives each league a full working flow: configure roster rules, lock in keepers, run the main draft, manage taxi slots, and review the final board after the room is done.",
   },
   {
     icon: Database,
-    title: "Real Data Flow",
-    body: "The app separates DraftKit from the external Player API so draft tools stay clean while player data remains reusable.",
+    title: "Player Data",
+    body: "Player search, valuation snapshots, stats, transactions, and MLB depth-chart context come from the separate Player API so the draft room stays fast while player data keeps updating independently.",
   },
   {
     icon: Shield,
-    title: "Private Workspaces",
-    body: "Cookie-based sessions and league-scoped workflows keep each draft room stable, persistent, and isolated.",
+    title: "League Workspaces",
+    body: "Accounts, league-scoped state, and saved draft rooms keep each workspace persistent and private, so your board, roster assignments, and draft history stay attached to the right league.",
   },
 ];
 
 const features = [
-  "League configuration for keeper, main draft, and taxi-round formats",
-  "Live player lookup and valuation support during draft prep and draft day",
-  "A product structure designed for class-scale leagues without fake enterprise complexity",
-  "A split frontend, backend, and Player API architecture that mirrors a real deployment setup",
+  "League configuration for roster slots, budgets, contracts, and draft structure",
+  "Keeper, draft, taxi, and post-draft pages connected through one league workflow",
+  "Draft views for board management, player stats, team rosters, draft history, and MLB depth",
+  "Separate Player API support for search, valuations, transaction updates, and player detail",
 ];
 
 export const metadata = {
   title: "About | DraftElite",
   description:
-    "About DraftElite and how the fantasy baseball draft assistant is structured.",
+    "Learn how DraftElite helps fantasy baseball leagues manage keepers, drafts, taxi rounds, and player data.",
 };
 
 export default function AboutPage() {
@@ -96,11 +96,19 @@ export default function AboutPage() {
                 </h1>
 
                 <p className="mt-5 max-w-3xl text-[15px] leading-8 text-white/82 sm:text-[17px]">
-                  DraftElite is a fantasy baseball draft assistant focused on
-                  the actual decision moments that matter: setting league rules
-                  correctly, tracking keeper impact, surfacing player data
-                  quickly, and keeping your board readable when the room gets
-                  busy.
+                  DraftElite is a fantasy baseball workspace for the parts of a
+                  league that usually get scattered across spreadsheets, notes,
+                  and stat sites. It keeps configuration, keeper decisions,
+                  draft actions, taxi planning, and post-draft review inside
+                  one league-centered workflow.
+                </p>
+
+                <p className="mt-4 max-w-3xl text-[15px] leading-8 text-white/72 sm:text-[16px]">
+                  During the draft, the app combines your saved league state
+                  with live player data from the Player API, so managers can
+                  move between the draft board, sortable player stats, roster
+                  context, draft history, and MLB depth information without
+                  losing the room.
                 </p>
 
                 <ul className="mt-6 space-y-3 text-sm text-white/78">

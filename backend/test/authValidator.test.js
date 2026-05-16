@@ -1,6 +1,8 @@
 const {
+  validateForgotPasswordPayload,
   validateLoginPayload,
   validateRegisterPayload,
+  validateResetPasswordPayload,
 } = require('../src/validators/authValidators');
 
 describe('auth validators', () => {
@@ -92,5 +94,52 @@ describe('auth validators boundary cases', () => {
       email: 'user@example.test',
       password: 'Password123',
     });
+  });
+});
+
+describe('password reset auth validators', () => {
+  test('normalizes forgot password payload email', () => {
+    expect(
+      validateForgotPasswordPayload({
+        email: '  MANAGER@Example.TEST  ',
+      }),
+    ).toEqual({
+      email: 'manager@example.test',
+    });
+  });
+
+  test.each([
+    [{ email: '' }, 'email is required'],
+    [{ email: '   ' }, 'email is required'],
+    [{ email: 123 }, 'email must be a string'],
+    [{ email: 'not-an-email' }, 'Invalid email format'],
+  ])('rejects invalid forgot password payload %#', (payload, expectedMessage) => {
+    expect(() => validateForgotPasswordPayload(payload)).toThrow(expectedMessage);
+  });
+
+  test('normalizes reset password payload token without trimming password', () => {
+    const password = '  new-valid-password  ';
+
+    expect(
+      validateResetPasswordPayload({
+        token: '  reset-token-value  ',
+        password,
+      }),
+    ).toEqual({
+      token: 'reset-token-value',
+      password,
+    });
+  });
+
+  test.each([
+    [{ token: '', password: 'new-valid-password' }, 'token is required'],
+    [{ token: '   ', password: 'new-valid-password' }, 'token is required'],
+    [{ token: 123, password: 'new-valid-password' }, 'token must be a string'],
+    [{ token: 'x'.repeat(257), password: 'new-valid-password' }, 'token must be at most 256 characters'],
+    [{ token: 'valid-token', password: 'short' }, 'Password must be at least 8 characters'],
+    [{ token: 'valid-token', password: 12345678 }, 'password must be a string'],
+    [{ token: 'valid-token', password: 'x'.repeat(129) }, 'Password must be at most 128 characters'],
+  ])('rejects invalid reset password payload %#', (payload, expectedMessage) => {
+    expect(() => validateResetPasswordPayload(payload)).toThrow(expectedMessage);
   });
 });

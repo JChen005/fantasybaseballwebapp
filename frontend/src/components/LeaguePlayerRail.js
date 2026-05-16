@@ -94,7 +94,9 @@ export default function LeaguePlayerRail({
       const combinedPlayers = results.flatMap((result) => result.players || []);
 
       const uniquePlayers = Array.from(
-        new Map(combinedPlayers.map((player) => [player.mlbPlayerId, player])).values()
+        new Map(
+          combinedPlayers.map((player) => [player.mlbPlayerId, player])
+        ).values()
       );
 
       const filteredPlayers = uniquePlayers.filter(
@@ -106,36 +108,43 @@ export default function LeaguePlayerRail({
   }
 
   return (
-    <div className="fixed left-0 top-0 h-full w-55 p-3">
+    <div className="fixed left-0 top-0 flex h-full w-55 flex-col p-3">
       {(pathname?.includes('/keeper') || pathname?.includes('/taxi')) ? (
-        <div className="mb-4">
+        <div className="mb-4 shrink-0">
           <LeagueFlowNav compact />
         </div>
       ) : null}
 
       <input
-        className="input input-bordered my-2"
+        className="input input-bordered my-2 shrink-0"
         placeholder="Search Players..."
         onKeyDown={handleSearch}
       />
 
-      {players &&
-        players.map((player) => (
-          <PlayerBox
-            key={player.mlbPlayerId}
-            player={player}
-            selectedPlayer={selectedPlayer}
-            setSelectedPlayer={setSelectedPlayer}
-            showEligible={showEligible}
-          />
-        ))}
+      <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1">
+        {players &&
+          players.map((player) => (
+            <PlayerBox
+              key={player.mlbPlayerId}
+              player={player}
+              selectedPlayer={selectedPlayer}
+              setSelectedPlayer={setSelectedPlayer}
+              showEligible={showEligible}
+            />
+          ))}
+      </div>
     </div>
   );
 }
 
 // sub components
 
-function PlayerBox({ player, selectedPlayer, setSelectedPlayer, showEligible }) {
+function PlayerBox({
+  player,
+  selectedPlayer,
+  setSelectedPlayer,
+  showEligible
+}) {
   const isSelected = selectedPlayer?.mlbPlayerId === player.mlbPlayerId;
   const positions = normalizePositions(player);
   const eligibleSlots = getEligibleKeeperSlots(player);
@@ -167,9 +176,11 @@ function PlayerBox({ player, selectedPlayer, setSelectedPlayer, showEligible }) 
           {player.name}
         </div>
 
-        {showEligible && <div className="text-[11px] text-slate-400">
-          {eligibleSlots.join(', ')}
-        </div>}
+        {showEligible && (
+          <div className="text-[11px] text-slate-400">
+            {eligibleSlots.join(', ')}
+          </div>
+        )}
       </div>
     </button>
   );

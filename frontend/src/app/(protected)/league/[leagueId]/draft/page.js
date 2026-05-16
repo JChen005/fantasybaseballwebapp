@@ -10,6 +10,7 @@ import DraftBoardView from './DraftBoardView';
 import DraftTabs from './DraftTabs';
 import PlayerCell from './PlayerCell';
 import PlayerLookupView from './PlayerLookupView';
+import PlayerStatsView from './PlayerStatsView';
 import RecentPicksView from './RecentPicksView';
 import RosterView from './RosterView';
 import ValuationPoolView from './ValuationPoolView';
@@ -43,6 +44,7 @@ export default function Page() {
       <DraftTabs activeView={activeView} leagueId={leagueId} />
 
       {activeView === 'draft' ? <DraftBoardView {...sharedProps} /> : null}
+      {activeView === 'stats' ? <PlayerStatsView {...sharedProps} /> : null}
       {activeView === 'recent' ? <RecentPicksView {...sharedProps} /> : null}
       {activeView === 'roster' ? <RosterView {...sharedProps} /> : null}
       {activeView === 'budget' ? <BudgetView {...sharedProps} /> : null}
@@ -52,5 +54,4 @@ export default function Page() {
     </section>
   );
 }
-
 
