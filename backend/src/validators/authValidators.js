@@ -58,7 +58,22 @@ function validateLoginPayload(payload = {}) {
   };
 }
 
+function validateForgotPasswordPayload(payload = {}) {
+  return {
+    email: normalizeEmail(payload.email),
+  };
+}
+
+function validateResetPasswordPayload(payload = {}) {
+  return {
+    token: ensureNonEmptyString(payload.token, 'token', { maxLength: 256 }),
+    password: validatePassword(payload.password),
+  };
+}
+
 module.exports = {
   validateRegisterPayload,
   validateLoginPayload,
+  validateForgotPasswordPayload,
+  validateResetPasswordPayload,
 };

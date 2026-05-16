@@ -4,10 +4,18 @@ const { asyncHandler } = require('../utils/asyncHandler');
 const { AppError } = require('../utils/appError');
 const { REFRESH_COOKIE, setAuthCookies, clearAuthCookies } = require('../utils/cookies');
 const { requireAuth } = require('../middleware/auth');
-const { validateRegisterPayload, validateLoginPayload } = require('../validators/authValidators');
+const {
+  validateRegisterPayload,
+  validateLoginPayload,
+  validateForgotPasswordPayload,
+  validateResetPasswordPayload,
+} = require('../validators/authValidators');
+
 const {
   registerUser,
   loginUser,
+  requestPasswordReset,
+  resetPassword,
   refreshTokens,
   revokeRefreshToken,
   getAuthenticatedUser,
@@ -32,6 +40,25 @@ router.post(
     const { user, accessToken, refreshToken } = await loginUser(payload);
     setAuthCookies(res, accessToken, refreshToken);
     res.json({ user });
+  })
+);
+
+router.post(
+  '/forgot-password',
+  asyncHandler(async (req, res) => {
+    const payload = validateForgotPasswordPayload(req.body);
+    const result = await requestPasswordReset(payload);
+    res.status(202).json(result);
+  })
+);
+
+router.post(
+  '/reset-password',
+  asyncHandler(async (req, res) => {
+    const payload = validateResetPasswordPayload(req.body);
+    await resetPassword(payload);
+    clearAuthCookies(res);
+    res.json({ success: true });
   })
 );
 

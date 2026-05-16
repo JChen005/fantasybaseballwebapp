@@ -1,27 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { draftkitApi } from "lib/draftkitApi";
 import PublicShell from "components/PublicShell";
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [form, setForm] = useState({ email: "", password: "" });
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [resetUrl, setResetUrl] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setMessage("");
+    setResetUrl("");
     setLoading(true);
 
     try {
-      await draftkitApi.login(form);
-      router.push("/dashboard");
+      const result = await draftkitApi.requestPasswordReset({ email });
+      setMessage(result.message || "Password reset request created.");
+      if (result.resetUrl) {
+        setResetUrl(result.resetUrl);
+      }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Could not create password reset request.");
     } finally {
       setLoading(false);
     }
@@ -37,22 +42,18 @@ export default function LoginPage() {
           <div className="relative space-y-5">
             <div className="space-y-2">
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/68">
-                Login
+                Password Reset
               </p>
               <h1 className="text-3xl font-medium tracking-[-0.04em] text-white">
-                Return to your board.
+                Reset your password.
               </h1>
               <p className="text-sm leading-7 text-white/72">
-                Access your DraftElite workspace and continue your league prep
-                with your saved draft context.
+                Enter the email for your DraftElite account. In demo mode, the reset link will appear here.
               </p>
             </div>
 
             <form onSubmit={onSubmit} className="space-y-3" noValidate>
-              <label
-                className="block text-sm font-medium text-white/86"
-                htmlFor="email"
-              >
+              <label className="block text-sm font-medium text-white/86" htmlFor="email">
                 Email
               </label>
               <input
@@ -61,61 +62,48 @@ export default function LoginPage() {
                 placeholder="you@example.com"
                 type="email"
                 autoComplete="email"
-                value={form.email}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, email: e.target.value }))
-                }
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
                 required
               />
-              <label
-                className="block text-sm font-medium text-white/86"
-                htmlFor="password"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                className="w-full rounded-2xl border border-white/12 bg-white/8 px-4 py-3 text-white outline-none backdrop-blur-sm placeholder:text-white/45 focus:border-[#63dfbc]"
-                placeholder="Your password"
-                type="password"
-                autoComplete="current-password"
-                value={form.password}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, password: e.target.value }))
-                }
-                required
-              />
-              <p
-                className="min-h-5 text-sm text-[#fda4af]"
-                role="status"
-                aria-live="polite"
-              >
+
+              <p className="min-h-5 text-sm text-[#fda4af]" role="status" aria-live="polite">
                 {error}
               </p>
-              <div className="text-right">
-              <Link
-                href="/forgot-password"
-                className="text-sm text-[#7ce8ce] underline underline-offset-4"
-              >
-                Forgot password?
-              </Link>
-            </div>
+
+              {message ? (
+                <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-100">
+                  {message}
+                </div>
+              ) : null}
+
+              {resetUrl ? (
+                <div className="space-y-2 rounded-2xl border border-white/12 bg-white/8 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+                    Reset link
+                  </p>
+                  <Link
+                    href={resetUrl}
+                    className="break-all text-sm text-[#7ce8ce] underline underline-offset-4"
+                  >
+                    {resetUrl}
+                  </Link>
+                </div>
+              ) : null}
+
               <button
                 className="inline-flex w-full items-center justify-center rounded-full bg-[#54d7b0] px-5 py-3 text-sm font-semibold text-[#07111d] shadow-[0_12px_30px_rgba(84,215,176,0.28)] transition hover:-translate-y-0.5 hover:bg-[#68e4bf] disabled:translate-y-0 disabled:opacity-60"
                 disabled={loading}
                 type="submit"
               >
-                {loading ? "Logging in..." : "Login"}
+                {loading ? "Creating reset link..." : "Create reset link"}
               </button>
             </form>
 
             <p className="text-sm text-white/72">
-              New user?{" "}
-              <Link
-                href="/register"
-                className="text-[#7ce8ce] underline underline-offset-4"
-              >
-                Register
+              Remembered it?{" "}
+              <Link href="/login" className="text-[#7ce8ce] underline underline-offset-4">
+                Login
               </Link>
             </p>
           </div>
