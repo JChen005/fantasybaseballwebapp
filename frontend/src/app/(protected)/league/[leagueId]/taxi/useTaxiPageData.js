@@ -72,15 +72,18 @@ export default function useTaxiPageData({ leagueId, selectedPlayer, setSelectedP
     const missingIds = taxiPlayerIds.filter((id) => !playerPool[id]);
     if (!missingIds.length) return;
 
-    Promise.all(missingIds.map((playerId) => playerApi.getPlayerById(playerId)))
+    playerApi.listPlayers({ limit: 500, includeInactive: true })
       .then((results) => {
+        const players = Array.isArray(results?.players) ? results.players : [];
+
         setPlayerPool((current) => {
           const next = { ...current };
 
-          for (const result of results) {
-            const player = result?.player || result;
-            const id = player?.mlbPlayerId ?? player?.playerId;
-            if (id != null) next[Number(id)] = player;
+          for (const player of players) {
+            const id = Number(player?.mlbPlayerId ?? player?.playerId);
+            if (!Number.isInteger(id)) continue;
+            if (!missingIds.includes(id)) continue;
+            next[id] = player;
           }
 
           return next;
