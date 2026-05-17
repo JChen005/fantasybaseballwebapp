@@ -92,14 +92,6 @@ export default function LoginPage() {
               >
                 {error}
               </p>
-              <div className="text-right">
-              <Link
-                href="/forgot-password"
-                className="text-sm text-[#7ce8ce] underline underline-offset-4"
-              >
-                Forgot password?
-              </Link>
-            </div>
               <button
                 className="inline-flex w-full items-center justify-center rounded-full bg-[#54d7b0] px-5 py-3 text-sm font-semibold text-[#07111d] shadow-[0_12px_30px_rgba(84,215,176,0.28)] transition hover:-translate-y-0.5 hover:bg-[#68e4bf] disabled:translate-y-0 disabled:opacity-60"
                 disabled={loading}
@@ -109,15 +101,25 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <p className="text-sm text-white/72">
-              New user?{" "}
-              <Link
-                href="/register"
-                className="text-[#7ce8ce] underline underline-offset-4"
-              >
-                Register
-              </Link>
-            </p>
+            <div className="space-y-2 text-sm">
+              <p className="text-white/72">
+                New user?{" "}
+                <Link
+                  href="/register"
+                  className="text-[#7ce8ce] underline underline-offset-4"
+                >
+                  Register
+                </Link>
+              </p>
+              <div>
+                <Link
+                  href="/forgot-password"
+                  className="text-[#7ce8ce] underline underline-offset-4"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       </div>
