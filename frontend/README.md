@@ -64,7 +64,7 @@ Query param `view` selects a sub-view (default: draft board):
 
 ### Session undo / redo
 
-- implemented in `useDraftPageData.js` with a client-side action log (up to 50 entries)
+- implemented in `draft/hooks/` (composed by `useDraftPageData.js`) with a client-side action log (up to 50 entries)
 - each entry stores a human-readable description plus before/after snapshots of teams, picks, and `currentPickNumber`
 - covers drafting a player and moving/trading players on the roster view
 - after undo or redo, a page-level banner shows what was reversed or restored (auto-dismisses after 6 seconds)
@@ -81,7 +81,8 @@ Query param `view` selects a sub-view (default: draft board):
 - `src/app/(protected)/league/[leagueId]/config/page.js`
 - `src/app/(protected)/league/[leagueId]/keeper/page.js`
 - `src/app/(protected)/league/[leagueId]/draft/page.js`
-- `src/app/(protected)/league/[leagueId]/draft/useDraftPageData.js`
+- `src/app/(protected)/league/[leagueId]/draft/useDraftPageData.js` (composer)
+- `src/app/(protected)/league/[leagueId]/draft/hooks/` (core data, board search, player selection, roster moves, undo/redo, depth, lookup, notifications)
 - `src/app/(protected)/api-center/page.js`
 - `src/components/sidebar.js`
 - `src/components/KeeperPlayerRail.js`
